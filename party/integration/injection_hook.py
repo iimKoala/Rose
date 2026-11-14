@@ -95,6 +95,14 @@ class PartyInjectionHook:
         if not self.is_enabled():
             return []
 
+        # A friend's custom mod still on its way to us: the injection waits for
+        # it a little (party/core/mod_sharing.py), as it usually arrived in champ select
+        try:
+            if not self.party_manager.wait_for_mods():
+                log.info("[PARTY_INJECT] A friend's mod file did not arrive in time: their official skin is used")
+        except Exception as e:
+            log.debug(f"[PARTY_INJECT] Could not wait for friends' mods: {e}")
+
         party_skins = self.get_party_skins_for_injection()
         if not party_skins:
             return []

@@ -28,6 +28,10 @@ except ImportError:
 
 RELAY_URL = os.environ.get("ROSE_RELAY_URL", _CONFIGURED_URL)
 PING_INTERVAL = 25.0
+# The largest frame taken from the relay: a piece of a mod file one member
+# sends another (party/network/mod_transfer.py) with its header. The member
+# list alone needed 64 KiB.
+MAX_FRAME_BYTES = 1024 * 1024
 CONNECT_TIMEOUT = 15.0
 # Wait before each reconnect attempt, in seconds
 RECONNECT_DELAYS = (1.0, 2.0, 5.0, 10.0, 20.0, 30.0)
@@ -145,6 +149,9 @@ class PartyRelay:
         # Callbacks
         self._on_members_changed: Optional[Callable[["PartyRelay"], None]] = None
         self._on_connection_changed: Optional[Callable[["PartyRelay"], None]] = None
+        # What one member sends to us alone (party/network/mod_transfer.py)
+        self._on_direct: Optional[Callable[[int, dict], None]] = None
+        self._on_binary: Optional[Callable[[int, bytes], None]] = None
 
     @property
     def connected(self) -> bool:
@@ -164,6 +171,36 @@ class PartyRelay:
         on_connection_changed: connection lost or restored."""
         self._on_members_changed = on_members_changed
         self._on_connection_changed = on_connection_changed
+
+    def set_direct_callbacks(
+        self,
+        on_direct: Optional[Callable[[int, dict], None]] = None,
+        on_binary: Optional[Callable[[int, bytes], None]] = None,
+    ):
+        """on_direct(sender id, data): a message one member sent to us alone.
+        on_binary(sender id, payload): a binary frame one member sent to us alone.
+        Both are called in the receive loop: they must not wait."""
+        self._on_direct = on_direct
+        self._on_binary = on_binary
+
+    async def send_to(self, summoner_id: int, data: dict) -> bool:
+        """Send *data* to one member of the room only. False when it did not go out."""
+        return await self._send_direct(json.dumps({"type": "to", "to": summoner_id, "data": data}))
+
+    async def send_binary_to(self, summoner_id: int, payload: bytes) -> bool:
+        """Send *payload* to one member of the room only, in a binary frame: its
+        first 8 bytes tell the relay who it is for. False when it did not go out."""
+        return await self._send_direct(int(summoner_id).to_bytes(8, "little") + payload)
+
+    async def _send_direct(self, frame) -> bool:
+        ws = self._ws
+        if ws is None or not self._connected or self._replaced:
+            return False
+        try:
+            await ws.send(frame)
+            return True
+        except ConnectionClosed:
+            return False  # _run notices the drop and reconnects
 
     async def connect(self, timeout: float = CONNECT_TIMEOUT) -> bool:
         """Join the room. Returns False if the room can't be reached;
@@ -255,7 +292,7 @@ class PartyRelay:
         error: Optional[BaseException] = None
 
         for context in contexts:
-            kwargs = {"max_size": 65536}
+            kwargs = {"max_size": MAX_FRAME_BYTES}
             if context is not None:
                 kwargs["ssl"] = context
             try:
@@ -362,6 +399,10 @@ class PartyRelay:
     async def _receive(self, ws):
         try:
             async for message in ws:
+                if isinstance(message, (bytes, bytearray)):
+                    if self._on_binary and len(message) > 8:
+                        self._call_direct(self._on_binary, int.from_bytes(message[:8], "little"), bytes(message[8:]))
+                    continue
                 if not isinstance(message, str) or message == "pong":
                     continue
                 try:
@@ -379,12 +420,21 @@ class PartyRelay:
                     log.debug(f"[RELAY] Room {self.room_key[:8]}: {len(self.members)} member(s)")
                     await self._deliver_state()
                     self._notify(self._on_members_changed)
+                if isinstance(msg, dict) and msg.get("type") == "from" and self._on_direct:
+                    self._call_direct(self._on_direct, msg.get("from"), msg.get("data"))
         except ConnectionClosed as e:
             log.info(f"[RELAY] Room {self.room_key[:8]} connection closed: {e}")
         except asyncio.CancelledError:
             raise
         except Exception as e:
             log.warning(f"[RELAY] Receive error in room {self.room_key[:8]}: {e}")
+
+    def _call_direct(self, callback, sender, payload) -> None:
+        """A direct message's callback must never end the receive loop"""
+        try:
+            callback(sender, payload)
+        except Exception as e:
+            log.warning(f"[RELAY] A direct message from {sender} could not be handled: {e}")
 
     async def _keepalive(self, ws):
         """App-level ping; the relay answers it without waking the room."""

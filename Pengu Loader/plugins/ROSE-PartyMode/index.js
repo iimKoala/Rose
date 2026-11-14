@@ -482,6 +482,21 @@
 
     .peer-remove:hover { color: #ff4646; }
 
+    .peer-skin-switch {
+      background: none;
+      border: 1px solid #3c3c41;
+      color: #a09b8c;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 10px;
+      white-space: nowrap;
+      transition: color .2s, border-color .2s;
+    }
+
+    .peer-skin-switch:hover { border-color: #c8aa6e; color: #f0e6d2; }
+
+    .peer-skin-switch.off { color: #5b5a56; text-decoration: line-through; }
+
     .no-peers {
       color: #5b5a56;
       font-family: var(--font-body), Arial, sans-serif;
@@ -871,6 +886,21 @@
             const skinInfo = peer.skin_selection
               ? t("Skin: {id}", { id: peer.skin_selection.skin_id })
               : "";
+            // The custom skin mod this friend plays with, and where its file stands on this PC
+            // (Rose asks the friend for a mod you don't have; party/core/mod_sharing.py)
+            const mod = peer.custom_mod;
+            let modInfo = "";
+            if (mod) {
+              const percent = mod.size ? Math.min(100, Math.floor((100 * (mod.received || 0)) / mod.size)) : 0;
+              const modState =
+                mod.state === "have" ? t("ready")
+                : mod.state === "receiving" ? t("downloading {percent}%", { percent })
+                : mod.state === "asked" ? t("asking your friend for it...")
+                : mod.state === "failed" ? t("could not be fetched: the official skin is shown")
+                : t("your friend's Rose cannot send it: the official skin is shown");
+              modInfo = `${escapeHtml(t("Custom skin"))}: ${escapeHtml(String(mod.name || ""))} (${escapeHtml(modState)})`;
+            }
+            const skinOff = !!peer.skin_off;
 
             return `
             <div class="peer-item" data-summoner-id="${peer.summoner_id}">
@@ -879,7 +909,9 @@
                 ${isWaiting ? '<span class="peer-status waiting"><span class="spinner"></span> ' : `<span class="peer-status ${lobbyStatus}">`}
                 ${escapeHtml(statusText)}</span>
                 ${skinInfo ? `<span class="peer-skin">${skinInfo}</span>` : ""}
+                ${modInfo ? `<span class="peer-skin peer-mod">${modInfo}</span>` : ""}
               </div>
+              <button class="peer-skin-switch ${skinOff ? "off" : ""}" title="${escapeHtml(t(skinOff ? "This friend's skin is not shown on your screen. Click to show it." : "This friend's skin is shown on your screen. Click to switch it off for you."))}" onclick="window.rosePartySetSkinOff(${peer.summoner_id}, ${skinOff ? "false" : "true"})">${escapeHtml(t(skinOff ? "Skin off" : "Skin on"))}</button>
               <button class="peer-remove" title="${escapeHtml(t("Remove from your party"))}" onclick="window.rosePartyRemovePeer(${peer.summoner_id})">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -1026,6 +1058,13 @@
   // Global function for remove button onclick
   window.rosePartyRemovePeer = function (summonerId) {
     if (!sendBridgeAction({ type: "party-remove-peer", summoner_id: summonerId })) {
+      showConnectionError("add-peer-message", t("Rose is not reachable. Check that Rose is running, then try again."));
+    }
+  };
+
+  // The switch on a friend's row: their skin is, or is not, applied on this PC (they are not told)
+  window.rosePartySetSkinOff = function (summonerId, off) {
+    if (!sendBridgeAction({ type: "party-peer-skin-off", summoner_id: summonerId, off: !!off })) {
       showConnectionError("add-peer-message", t("Rose is not reachable. Check that Rose is running, then try again."));
     }
   };

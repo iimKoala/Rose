@@ -197,6 +197,18 @@ Restart Rose, then lock a champion in champ select.
 4. Import **Items**, then open the shop in game: the set's first two titles carry the skill order, like
    "Start (levels 1-3: W Q E)" and "Build in this order (max W > Q > E)".
 
+## 15. Party mode: a friend's custom skin arrives by itself (new, Nov 14; needs the relay first)
+Cannot be tried before the party server is set up (one sign-in to Cloudflare at this PC, see
+`docs/party-mod-sharing.md`). Until then the party panel says "no party server is configured in this build".
+After that, with two PCs on this version, both in one party by the code:
+1. One picks a champion and a custom skin. On the other PC the friend's row says
+   "Custom skin: <name> (asking your friend for it...)", then "downloading N%", then "ready".
+2. **Skin off** on a friend's row: their skin is not applied on this PC and their file is not fetched.
+   **Skin on** brings it back. The friend is not told.
+3. Start the game: each sees the other's custom skin. If a file was still on its way, Rose waits up to 15 s
+   before it applies the skins. Tell me if the game opens without the skin: the wait may be too short.
+4. Received files are in `%LOCALAPPDATA%\Rose\mods\party-received`. They show in no mod list.
+
 If anything goes wrong: tray > Open Logs folder. The account window's log is `account_window_*.log`;
 the store's is `mod_store_*.log` (never contains the signed download links). LTK Manager's crash reports are in
 `%APPDATA%\dev.leaguetoolkit.manager\incidents`.

@@ -27,6 +27,7 @@ from ..protocol.message_types import SkinSelection
 from ..discovery.custom_mods import saved_mod_hashes
 from ..discovery.lobby_matcher import LobbyMatcher
 from ..discovery.skin_collector import SkinCollector, PartySkinData
+from .mod_sharing import ModSharing
 from .party_state import PartyState
 from .party_storage import load_party_key
 
@@ -91,6 +92,10 @@ class PartyManager:
 
         # Peers removed by the user (until they're added again)
         self._ignored_peers: Set[int] = set()
+
+        # Custom skin mods sent between members, and the friends whose skin
+        # the user switched off for their own screen (party/core/mod_sharing.py)
+        self.mod_sharing = ModSharing(on_change=self._on_mod_transfer)
 
         # Discovery
         self._lobby_matcher: Optional[LobbyMatcher] = None
@@ -193,6 +198,7 @@ class PartyManager:
 
         self._unreachable_rooms.clear()
         self._ignored_peers.clear()
+        self.mod_sharing.switched_off.clear()
         self._skin_state = None
         self._published_state = None
         self.party_state.clear_all()
@@ -273,7 +279,8 @@ class PartyManager:
         team_champions, team_champion_ids = self._lobby_matcher.get_team_info()
 
         return self._skin_collector.collect_relay_skins(
-            members=[member for member, _ in self._merged_members().values()],
+            members=[member for sid, (member, _) in self._merged_members().items()
+                     if sid not in self.mod_sharing.switched_off],
             my_summoner_id=self.party_state.my_summoner_id,
             team_champions=team_champions,
             team_champion_ids=team_champion_ids,
@@ -306,8 +313,39 @@ class PartyManager:
             on_members_changed=self._on_relay_members_changed,
             on_connection_changed=self._on_relay_connection_changed,
         )
+        self.mod_sharing.attach(relay)
         self._relays[room_key] = relay
         return relay
+
+    # ─── Custom mods between members ─────────────────────────────
+
+    def _on_mod_transfer(self):
+        """A friend's mod file started, moved on or ended: the panel shows it,
+        and a file that arrived is used from now on."""
+        if self.party_state.enabled:
+            self._refresh_peers()
+
+    def _fetch_missing_mods(self):
+        """Ask friends for the custom mods they play with and we lack."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # no party loop here (a test, or the party is stopping)
+        rooms = [(relay, list(relay.members)) for relay in list(self._relays.values())]
+        asyncio.ensure_future(self.mod_sharing.fetch_missing(rooms, self.party_state.my_summoner_id, set(self._ignored_peers)))
+
+    async def set_peer_skin_off(self, summoner_id: int, off: bool):
+        """The user's switch for one friend: their skin is not applied on this
+        PC while it is off (they stay in the party, and are not told)."""
+        if off:
+            self.mod_sharing.switched_off.add(summoner_id)
+        else:
+            self.mod_sharing.switched_off.discard(summoner_id)
+        self._refresh_peers()
+
+    def wait_for_mods(self, timeout: Optional[float] = None) -> bool:
+        """Called by the injection: wait for friends' mod files still arriving."""
+        return self.mod_sharing.wait() if timeout is None else self.mod_sharing.wait(timeout)
 
     async def _connect_relay(self, relay: PartyRelay) -> Optional[str]:
         """Connect a registered room. Returns an error message on failure."""
@@ -465,6 +503,9 @@ class PartyManager:
                     self._skin_collector.update_from_peer(selection)
             else:
                 self.party_state.clear_peer_skin(sid)
+            self.party_state.set_peer_mod(
+                sid, self.mod_sharing.describe(member.get("skin")), sid in self.mod_sharing.switched_off
+            )
 
         for sid in [sid for sid in list(self.party_state.peers) if sid not in merged]:
             name = self.party_state.peers[sid].summoner_name
@@ -476,6 +517,7 @@ class PartyManager:
         if self.party_state.enabled:
             home = self._relays.get(self._home_room)
             self.party_state.connection = "online" if home and home.connected else "reconnecting"
+            self._fetch_missing_mods()
 
         self._notify_state_change()
 
@@ -613,6 +655,8 @@ class PartyManager:
                     # The hash of the file picked: a friend's exact copy has it
                     # (older Rose versions match archive mods by it too)
                     skin_state["custom_mod_hash"] = legacy_hash
+                # What a friend without this file needs to ask us for it
+                self.mod_sharing.announce(skin_state, selection.custom_mod_path)
 
         return skin_state
 

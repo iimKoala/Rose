@@ -18,6 +18,8 @@ from utils.core.logging import get_logger
 from utils.core.paths import get_user_data_dir
 from utils.core.safe_extract import MOD_ARCHIVE_SUFFIXES
 
+from .received_mods import received_mod
+
 log = get_logger()
 
 # Rose metadata stored next to mods, never part of a mod
@@ -166,6 +168,11 @@ def find_local_mod(
     """
     if not champion_id or not (content_hash or legacy_hash):
         return None
+
+    # The friend's own file, sent to us before (party/network/mod_transfer.py)
+    received = received_mod(content_hash)
+    if received is not None:
+        return received
 
     mods_root = get_mods_root()
     try:

@@ -36,6 +36,7 @@ from ui.handlers.randomization_handler import cancel_random_mode_for_selection
 from .account_handlers import AccountHandlersMixin
 from .build_handlers import BuildHandlersMixin
 from .mod_store_handlers import ModStoreHandlersMixin
+from .party_mod_handlers import PartyModHandlersMixin
 from .reconnect_handlers import ReconnectHandlersMixin
 from utils.system.admin_utils import (
     is_admin,
@@ -246,7 +247,7 @@ def _choose_mod_image_file() -> Optional[Path]:
                 pass
 
 
-class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersMixin, ReconnectHandlersMixin):
+class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersMixin, ReconnectHandlersMixin, PartyModHandlersMixin):
     """Handles routing and processing of WebSocket messages"""
     
     def __init__(
@@ -472,6 +473,8 @@ class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersM
             pass
         # The reconnect screen's drop-down (the ROSE-ReconnectMods plugin): routed in reconnect_handlers.py
         elif self._route_reconnect_message(payload_type, payload):
+            pass
+        elif self._route_party_mod_message(payload_type, payload):
             pass
         elif payload.get("skin"):
             # Handle skin detection message

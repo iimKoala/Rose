@@ -271,6 +271,8 @@ async function loadPlugin() {
 
   const ui = {
     document,
+    // What a button's onclick="window.name(...)" would run (this DOM does not run attribute handlers)
+    call: (name, ...args) => context[name](...args),
     get socket() { return FakeWebSocket.instances[FakeWebSocket.instances.length - 1]; },
     get sockets() { return FakeWebSocket.instances; },
     el: (id) => document.getElementById(id),
@@ -402,4 +404,52 @@ test("Rose's party state settles a request whose answer was lost", async () => {
   ui.state(false); // party mode went off: no friend is being added any more
   assert.ok(ui.dialog().hasAttribute("close-button"));
   assert.equal(ui.el("party-toggle-btn").disabled, false);
+});
+
+// ─── A friend's custom skin mod and the switch for their skin ───────────────────
+
+const friend = (extra = {}) => ({ summoner_id: 7, summoner_name: "B", connected: true, connection_state: "connected",
+  in_lobby: true, skin_selection: { skin_id: 103000 }, custom_mod: null, skin_off: false, ...extra });
+
+test("a friend's row says which custom skin they play with and where its file stands", async () => {
+  const ui = await loadPlugin();
+  ui.openPanel();
+  const rowFor = (custom_mod) => {
+    ui.state(true, { peers: [friend({ custom_mod })] });
+    return ui.text("peers-list");
+  };
+
+  assert.doesNotMatch(rowFor(null), /Custom skin/, "an official skin has no mod line");
+  assert.match(rowFor({ name: "Cool Skin", size: 200, state: "receiving", received: 50 }), /Custom skin: Cool Skin \(downloading 25%\)/);
+  assert.match(rowFor({ name: "Cool Skin", size: 200, state: "have", received: 0 }), /Custom skin: Cool Skin \(ready\)/);
+  assert.match(rowFor({ name: "Cool Skin", size: 200, state: "asked", received: 0 }), /asking your friend for it/);
+  assert.match(rowFor({ name: "Cool Skin", size: 200, state: "failed", received: 0 }), /could not be fetched: the official skin is shown/);
+  assert.match(rowFor({ name: "Cool Skin", size: 0, state: "none", received: 0 }), /cannot send it: the official skin is shown/);
+
+  rowFor({ name: "<img src=x onerror=alert(1)>", size: 200, state: "have", received: 0 });
+  assert.equal(ui.document.querySelectorAll("#peers-list img").length, 0, "a mod's name is text, never markup");
+});
+
+test("the switch on a friend's row turns their skin off and on for this PC", async () => {
+  const ui = await loadPlugin();
+  ui.openPanel();
+  ui.state(true, { peers: [friend()] });
+  let button = ui.document.querySelector("#peers-list .peer-skin-switch");
+  assert.equal(button.textContent.trim(), "Skin on");
+  assert.equal(button.getAttribute("onclick"), "window.rosePartySetSkinOff(7, true)");
+
+  ui.call("rosePartySetSkinOff", 7, true);
+  assert.deepEqual(ui.socket.sent.at(-1), { type: "party-peer-skin-off", summoner_id: 7, off: true });
+  assert.equal(ui.el("party-toggle-btn").disabled, false, "nothing waits on it: Rose's next state shows the result");
+
+  ui.state(true, { peers: [friend({ skin_off: true })] });
+  button = ui.document.querySelector("#peers-list .peer-skin-switch");
+  assert.equal(button.textContent.trim(), "Skin off");
+  assert.ok(button.classList.contains("off"));
+  assert.equal(button.getAttribute("onclick"), "window.rosePartySetSkinOff(7, false)");
+  assert.equal(ui.document.querySelectorAll("#peers-list .peer-remove").length, 1, "the remove button is still there");
+
+  ui.socket.drop();
+  ui.call("rosePartySetSkinOff", 7, false);
+  assert.match(ui.text("add-peer-message"), /Rose is not reachable/);
 });

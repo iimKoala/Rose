@@ -21,6 +21,10 @@ class PartyPeerState:
     connection_state: str = "disconnected"  # connecting, handshaking, connected, disconnected, dead
     in_lobby: bool = False
     skin_selection: Optional[SkinSelection] = None
+    # The custom skin mod this friend plays with (party/core/mod_sharing.py: name,
+    # size, whether its file is here), and whether the user switched their skin off
+    custom_mod: Optional[dict] = None
+    skin_off: bool = False
 
 
 @dataclass
@@ -90,6 +94,13 @@ class PartyState:
                     "custom_mod_path": selection.custom_mod_path,
                 }
 
+    def set_peer_mod(self, summoner_id: int, custom_mod: Optional[dict], skin_off: bool):
+        """What the panel shows about a friend's custom mod and the user's switch for their skin"""
+        with self._lock:
+            if summoner_id in self.peers:
+                self.peers[summoner_id].custom_mod = custom_mod
+                self.peers[summoner_id].skin_off = skin_off
+
     def clear_peer_skin(self, summoner_id: int):
         """Clear peer skin selection"""
         with self._lock:
@@ -128,6 +139,8 @@ class PartyState:
                         "skin_selection": (
                             p.skin_selection.to_dict() if p.skin_selection else None
                         ),
+                        "custom_mod": p.custom_mod,
+                        "skin_off": p.skin_off,
                     }
                     for p in self.peers.values()
                 ],

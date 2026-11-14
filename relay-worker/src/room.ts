@@ -34,6 +34,8 @@ export class PartyRoom extends DurableObject {
   // Rose before 1.4.0 never pings: timing its sockets out after 90s made those
   // clients reconnect, and wake the room, all day. Theirs only go after this
   private static NEVER_PINGED_STALE_MS = 30 * 60_000;
+  // The largest binary frame passed on from one member to another (a piece of a mod file)
+  private static MAX_BINARY_BYTES = 1024 * 1024;
 
   constructor(ctx: DurableObjectState, env: any) {
     super(ctx, env);
@@ -64,7 +66,10 @@ export class PartyRoom extends DurableObject {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    if (typeof message !== 'string') return;
+    if (typeof message !== 'string') {
+      this.forwardBinary(ws, message);
+      return;
+    }
     if (message === 'pong') return;
 
     let msg: any;
@@ -118,7 +123,44 @@ export class PartyRoom extends DurableObject {
         ws.close(1000, 'client left');
         break;
       }
+
+      case 'to': {
+        // One member to one other, not to the room: how a mod file is asked for
+        const sender = ws.deserializeAttachment() as Attachment;
+        if (!sender || !('summoner_id' in sender)) break;
+        const target = this.socketOf(msg.to);
+        if (!target) break;
+        try {
+          target.send(JSON.stringify({ type: 'from', from: sender.summoner_id, data: msg.data ?? null }));
+        } catch {}
+        break;
+      }
     }
+  }
+
+  // A binary frame goes to one member: its first 8 bytes name the receiver (the
+  // summoner id, little-endian). The receiver gets the same frame with the
+  // sender's id there instead. Mod files travel in such frames; nothing of them
+  // is kept here.
+  private forwardBinary(ws: WebSocket, message: ArrayBuffer) {
+    if (message.byteLength <= 8 || message.byteLength > PartyRoom.MAX_BINARY_BYTES) return;
+    const sender = ws.deserializeAttachment() as Attachment;
+    if (!sender || !('summoner_id' in sender)) return;
+    try {
+      const view = new DataView(message);
+      const target = this.socketOf(Number(view.getBigUint64(0, true)));
+      if (!target) return;
+      view.setBigUint64(0, BigInt(sender.summoner_id), true);
+      target.send(message);
+    } catch {}
+  }
+
+  private socketOf(summonerId: unknown): WebSocket | null {
+    for (const ws of this.openSockets()) {
+      const info = ws.deserializeAttachment() as Attachment;
+      if (info && 'summoner_id' in info && info.summoner_id === summonerId) return ws;
+    }
+    return null;
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
