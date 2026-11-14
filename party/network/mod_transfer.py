@@ -9,10 +9,11 @@ it, through the party's relay, one member to one other. The relay passes the pie
 What keeps it safe:
 - An owner only sends a file whose hash it announced to the party as its own pick. Nothing else can be asked
   for.
-- A receiver only takes pieces of a file it asked for, from the member it asked, up to the size that member
-  announced and never past MAX_MOD_BYTES. The finished file must have the hash that was announced, or it is
-  deleted.
-- Files go to a folder of their own (party_cache_dir), never into the user's own mods.
+- A receiver only takes pieces of a file it asked for, from the member it asked and through the room it asked
+  in, up to the size that member announced and never past MAX_MOD_BYTES. The finished file must have the hash
+  that was announced, or it is deleted.
+- Files go to a folder of their own (party_cache_dir), never into the user's own mods. The folder never grows
+  past CACHE_BYTES (the oldest files go first), and one member has one file on its way at a time.
 
 Messages, one member to one other (PartyRelay.send_to / send_binary_to):
     {"t": "mod-want", "hash": h}                      the receiver asks
@@ -36,6 +37,7 @@ log = get_logger()
 MAGIC = b"RMOD"
 PIECE_BYTES = 256 * 1024
 MAX_MOD_BYTES = 600 * 1024 * 1024
+CACHE_BYTES = 5 * MAX_MOD_BYTES  # the folder of received files never grows past this: a full party's mods fit
 STALLED_S = 20.0  # a download that got no piece for this long is given up, so it can be asked for again
 HASH_RE_LENGTH = (16, 64)  # a content hash is hex digits, this many at least and at most
 SUFFIXES = (".fantome", ".zip", ".modpkg")
@@ -52,8 +54,9 @@ def piece_header(content_hash: str, number: int) -> bytes:
 class Download:
     """One file being received"""
 
-    def __init__(self, owner: int, content_hash: str, size: int, suffix: str, folder: Path):
+    def __init__(self, owner: int, content_hash: str, size: int, suffix: str, folder: Path, relay=None):
         self.owner, self.content_hash, self.size, self.suffix = owner, content_hash, size, suffix
+        self.relay = relay  # the room it was asked in: the same member id in another room is someone else
         self.received, self.next_piece, self.last_piece_at = 0, 0, time.monotonic()
         self.part = folder / f"{content_hash}.part"
         self.final = folder / f"{content_hash}{suffix}"
@@ -85,7 +88,7 @@ class ModTransfers:
     def attach(self, relay) -> None:
         """Take the direct messages of *relay* (one of the party's rooms)"""
         relay.set_direct_callbacks(lambda sender, data: self._on_direct(relay, sender, data),
-                                   lambda sender, payload: self._on_binary(sender, payload))
+                                   lambda sender, payload: self._on_binary(relay, sender, payload))
 
     def _changed(self) -> None:
         if self.on_change:
@@ -132,8 +135,15 @@ class ModTransfers:
             return False
         if current is not None:
             self._drop(current)
+        # a member has one pick: what they announced before is no longer fetched, nor remembered
+        for other in [d for d in self.downloads.values() if d.owner == int(owner)]:
+            self._drop(other)
+            del self.downloads[other.content_hash]
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        download = Download(int(owner), content_hash, int(size), suffix, self.cache_dir)
+        if not self._make_room(int(size)):
+            log.warning(f"[PARTY_MODS] No room for the mod {content_hash[:8]} ({size // 1024} KB): too many files are on their way")
+            return False
+        download = Download(int(owner), content_hash, int(size), suffix, self.cache_dir, relay)
         self.downloads[content_hash] = download
         if not await relay.send_to(owner, {"t": "mod-want", "hash": content_hash}):
             download.state = "failed"
@@ -141,6 +151,34 @@ class ModTransfers:
         log.info(f"[PARTY_MODS] Asked member {owner} for the mod {content_hash[:8]} ({size // 1024} KB)")
         self._changed()
         return True
+
+    def _make_room(self, size: int) -> bool:
+        """Keep the folder under CACHE_BYTES with *size* more, counting files on their way at their full size.
+        Leftovers of broken downloads are deleted first, then the oldest files. False: it cannot fit."""
+        active = {d.part: d.size for d in self.downloads.values() if d.state in ("asked", "receiving")}
+        total = sum(active.values())
+        if total + size > CACHE_BYTES:
+            return False
+        others = []
+        for path in self.cache_dir.iterdir():
+            try:
+                if path.is_file() and path not in active:
+                    info = path.stat()
+                    others.append((path.suffix != ".part", info.st_mtime, info.st_size, path))
+            except OSError:
+                continue
+        total += sum(entry[2] for entry in others)
+        # shortcut: the oldest goes first even when a friend still plays it (it is then asked for again);
+        # mark files on use if a party's mods ever stop fitting CACHE_BYTES
+        for _, _, file_bytes, path in sorted(others):
+            if total + size <= CACHE_BYTES:
+                break
+            try:
+                path.unlink()
+                total -= file_bytes
+            except OSError:
+                pass
+        return total + size <= CACHE_BYTES
 
     def _drop(self, download: Download, failed: bool = True) -> None:
         download.close()
@@ -151,13 +189,14 @@ class ModTransfers:
         if failed:
             download.state = "failed"
 
-    def _on_binary(self, sender, payload: bytes) -> None:
+    def _on_binary(self, relay, sender, payload: bytes) -> None:
         if len(payload) < 16 or payload[:4] != MAGIC:
             return
         prefix, number = payload[4:12].hex(), int.from_bytes(payload[12:16], "little")
-        download = next((d for d in self.downloads.values() if d.content_hash.startswith(prefix) and d.owner == sender), None)
+        download = next((d for d in self.downloads.values()
+                         if d.content_hash.startswith(prefix) and d.owner == sender and d.relay is relay), None)
         if download is None or download.state != "receiving" or number != download.next_piece:
-            return  # not asked for, not from its owner, or out of order: not taken
+            return  # not asked for, not from its owner in the room it was asked in, or out of order: not taken
         piece = payload[16:]
         if download.received + len(piece) > download.size:
             log.warning(f"[PARTY_MODS] Member {sender} sent more than the {download.size} bytes announced: dropped")
@@ -181,7 +220,7 @@ class ModTransfers:
                 self._sending[key] = asyncio.ensure_future(self._send(relay, sender, content_hash))
             return
         download = self.downloads.get(content_hash)
-        if download is None or download.owner != sender:
+        if download is None or download.owner != sender or download.relay is not relay:
             return
         if kind == "mod-start" and download.state == "asked":
             if int(data.get("size") or 0) != download.size:

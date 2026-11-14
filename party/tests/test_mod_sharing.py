@@ -5,7 +5,9 @@ No network: the room is a stand-in that hands one member's messages to the other
 
 import asyncio
 import hashlib
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -171,6 +173,53 @@ class TransferTests(TransferCase):
 
         self.assertFalse(self.friend.pending())
         self.assertTrue(self.run_async(self.friend.want(self.friend_relay, 9, "ab" * 16, 500, ".fantome")), "and it is asked for again")
+
+    def test_the_same_member_id_in_another_room_cannot_answer_for_the_owner(self):
+        content = b"x" * 500
+        wanted = hashlib.sha256(content).hexdigest()[:32]
+        other_room = Room()
+        self.friend.attach(other_room.join(2))  # the friend is in a second room too
+
+        async def answer(room):
+            sender = room.join(9)
+            await sender.send_to(2, {"t": "mod-start", "hash": wanted, "size": 500})
+            await sender.send_binary_to(2, piece_header(wanted, 0) + content)
+            await sender.send_to(2, {"t": "mod-end", "hash": wanted})
+
+        self.run_async(self.friend.want(self.friend_relay, 9, wanted, 500, ".fantome"))
+        self.run_async(answer(other_room))
+        self.assertEqual((self.friend.status(wanted)["state"], list((self.root / "friend-cache").iterdir())), ("asked", []))
+
+        self.run_async(answer(self.room))
+        self.assertEqual(self.friend.status(wanted)["state"], "have", "the room it was asked in is the one that counts")
+
+    def test_the_folder_of_received_files_never_grows_past_its_limit(self):
+        cache = self.root / "friend-cache"
+        cache.mkdir()
+        for name, size, age in (("11" * 16 + ".fantome", 80_000, 300), ("22" * 16 + ".zip", 80_000, 200), ("33" * 16 + ".part", 30_000, 100)):
+            (cache / name).write_bytes(b"o" * size)
+            os.utime(cache / name, (time.time() - age, time.time() - age))
+
+        with patch.object(mod_transfer, "CACHE_BYTES", 200_000):
+            self.assertTrue(self.run_async(self.fetch()))
+            self.assertEqual(sorted(path.name for path in cache.iterdir()), sorted(["22" * 16 + ".zip", self.hash + ".fantome"]),
+                             "the leftover of a broken download went first, then the oldest file")
+            self.run_async(self.friend.want(self.friend_relay, 9, "ab" * 16, 150_000, ".fantome"))  # on its way: counts in full
+            self.assertEqual(list(cache.iterdir()), [], "150,000 more only fits once both files are gone")
+            (cache / ("44" * 16 + ".zip")).write_bytes(b"o" * 10_000)
+            sent = len(self.friend_relay.sent)
+            self.assertFalse(self.run_async(self.friend.want(self.friend_relay, 8, "cd" * 16, 60_000, ".fantome")))
+            self.assertEqual((len(self.friend_relay.sent), self.friend.status("cd" * 16)["state"]), (sent, "none"), "refused, not asked for")
+            self.assertEqual([path.name for path in cache.iterdir()], ["44" * 16 + ".zip"], "and nothing was deleted for it")
+
+    def test_a_member_has_one_file_on_its_way(self):
+        async def two_picks():
+            return (await self.friend.want(self.friend_relay, 9, "ab" * 16, 500, ".fantome"),
+                    await self.friend.want(self.friend_relay, 9, "cd" * 16, 600, ".fantome"))
+
+        self.assertEqual(self.run_async(two_picks()), (True, True))
+        self.assertEqual((self.friend.status("ab" * 16)["state"], self.friend.status("cd" * 16)["state"]), ("none", "asked"))
+        self.assertEqual(list(self.friend.downloads), ["cd" * 16], "a member who keeps changing their pick fills nothing")
 
 
 class SharingTests(TransferCase):

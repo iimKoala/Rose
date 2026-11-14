@@ -43,8 +43,13 @@ with a way to switch off the ones you don't want, and the game does not start be
 ## What keeps it safe
 
 - An owner sends only a file whose hash it announced as its own pick; nothing else can be asked for.
-- A receiver takes only pieces of a file it asked for, from the member it asked, in order, up to the size
-  announced. The finished file must have the announced content hash or it is deleted.
+- A receiver takes only pieces of a file it asked for, from the member it asked and through the room it
+  asked in (the same member id in another room is someone else), in order, up to the size announced. The
+  finished file must have the announced content hash or it is deleted.
+- The folder of received files never grows past 3 GB (five mods of the largest size): before a file is
+  asked for, leftovers of broken downloads are deleted, then the oldest files. One member has one file on
+  its way at a time, so a member who keeps changing their pick fills nothing. Both came from the automatic
+  security review of the first commit.
 - Hashes are hex strings; suffixes are `.fantome`, `.zip`, `.modpkg`; names never become paths.
 - The relay refuses binary frames over 1 MiB and passes nothing to anyone but the receiver.
 
@@ -55,7 +60,9 @@ with a way to switch off the ones you don't want, and the game does not start be
   unit tests with a stand-in room.
 - Never run in a real champ select or game. The 15 s wait before a game is a guess.
 - Both PCs need this version: an older Rose does not announce the size, so nothing is asked of it.
-- Received files are not run through Rose's mod checker, and the folder is never cleaned up.
+- Received files are not run through Rose's mod checker. The folder is only cleaned when it is full.
+- Nothing limits how often a member can make the party fetch a new file. A party is the people given the
+  code; a friend's skin can be switched off.
 - Only the skin a friend plays with is shared. Map, font and announcer mods are each player's own.
 - A friend who paid for a mod sends it to the party like any other. Switch a friend's skin off, or do not
   play a paid mod in a party, where that is not wanted.
