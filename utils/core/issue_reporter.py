@@ -45,6 +45,7 @@ _ALLOWED_CODES = {
     'PENGU_ACTIVATION_FAILED',  # Pengu Loader could not be activated: Rose is missing from the client
     'PENGU_INJECTION_FAILED',   # Pengu Loader was activated, but its DLL is not in the League client
     'WINDOWS_ADMIN_SHELL',    # Windows runs every program as administrator: LTK Manager refuses to patch
+    'MOD_CRASHED_GAME',       # The game crashed on a mod's file (LTK Manager's MissingData incident), not the injection
 }
 
 # Reports about how the PC is set up, which Rose checks again as it starts

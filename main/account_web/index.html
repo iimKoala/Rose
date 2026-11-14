@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>League Accounts</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="topbar">
+      <div class="topbar-left pywebview-drag-region">
+        <img src="golden_rose.png" alt="">
+        <span>LEAGUE ACCOUNTS</span>
+      </div>
+      <div class="topbar-tabs">
+        <button class="tab active">LEAGUE OF LEGENDS</button>
+        <button class="tab">TEAMFIGHT TACTICS</button>
+      </div>
+      <div class="topbar-spacer pywebview-drag-region"></div>
+      <div class="topbar-buttons">
+        <button id="btn-min">_</button>
+        <button id="btn-max">□</button>
+        <button id="btn-close">×</button>
+      </div>
+    </div>
+    <div id="sidebar">
+      <button id="add-account">ADD ACCOUNT</button>
+      <div class="rank-distribution">
+        <h3>RANK DISTRIBUTION</h3>
+        <ul id="rank-list"></ul>
+      </div>
+      <div class="sidebar-footer">
+        <a href="#" id="import-link">Import</a>
+        <a href="#" id="export-link">Export</a>
+        <a href="#" id="store-link">Mod store</a>
+      </div>
+    </div>
+    <div id="main">
+      <div class="main-header">
+        <span class="ranked-label">RANKED SOLO / DUO</span>
+        <h1>ACCOUNTS</h1>
+        <span id="account-count"></span>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Search name, tag or account ID">
+        <select id="region">
+          <option value="">Region</option>
+        </select>
+        <select id="sort">
+          <option value="rank">Rank</option>
+          <option value="name">Name</option>
+          <option value="level">Level</option>
+        </select>
+      </div>
+      <div id="grid"></div>
+    </div>
+  </div>
+  <div id="login-screen">
+    <div class="login-card">
+      <div class="login-left">
+        <div class="login-diamond-wrap">
+          <svg id="login-diamond" class="login-diamond" viewBox="0 0 100 100">
+            <polygon points="50,5 95,50 50,95 5,50" fill="none" stroke="var(--gold)" stroke-width="2"/>
+          </svg>
+          <svg id="login-diamond-inner" class="login-diamond-inner" viewBox="0 0 100 100">
+            <polygon points="50,5 95,50 50,95 5,50" fill="none" stroke="var(--gold)" stroke-width="2"/>
+          </svg>
+        </div>
+        <img id="login-emblem" class="login-emblem" src="" alt="" style="display:none">
+        <div id="login-title">LOGGING IN</div>
+        <div id="login-name"></div>
+      </div>
+      <div class="login-right">
+        <div class="login-progress-bar">
+          <div id="login-progress" class="login-progress-fill"></div>
+        </div>
+        <ul id="login-steps">
+          <li class="login-step" data-step="Closing League">Closing League</li>
+          <li class="login-step" data-step="Starting the Riot Client">Starting the Riot Client</li>
+          <li class="login-step" data-step="Signing out of the Riot Client">Signing out of the Riot Client</li>
+          <li class="login-step" data-step="Filling in the sign-in">Filling in the sign-in</li>
+          <li class="login-step" data-step="Waiting for the sign-in">Waiting for the sign-in</li>
+          <li class="login-step" data-step="Starting League">Starting League</li>
+        </ul>
+        <div id="login-message"></div>
+        <button id="login-close">Close</button>
+      </div>
+    </div>
+  </div>
+  <div id="confirm-box" class="modal-backdrop">
+    <div class="modal">
+      <p id="confirm-text"></p>
+      <div class="modal-buttons">
+        <button id="confirm-yes">REMOVE</button>
+        <button id="confirm-no">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="import-box" class="modal-backdrop">
+    <div class="modal">
+      <h2>IMPORT ACCOUNTS</h2>
+      <p>Pick a text file with one username:password per line. Lines without a region get:</p>
+      <label for="import-region">Region</label>
+      <select id="import-region">
+        <option value="NA">NA</option>
+        <option value="EUW">EUW</option>
+        <option value="EUNE">EUNE</option>
+        <option value="KR">KR</option>
+        <option value="JP">JP</option>
+        <option value="BR">BR</option>
+        <option value="LAN">LAN</option>
+        <option value="LAS">LAS</option>
+        <option value="OCE">OCE</option>
+        <option value="TR">TR</option>
+        <option value="RU">RU</option>
+        <option value="PH">PH</option>
+        <option value="SG">SG</option>
+        <option value="TH">TH</option>
+        <option value="TW">TW</option>
+        <option value="VN">VN</option>
+        <option value="ME">ME</option>
+      </select>
+      <div id="import-error" class="form-error"></div>
+      <div class="modal-buttons">
+        <button id="import-go">CHOOSE FILE</button>
+        <button id="import-cancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="account-form" class="modal-backdrop">
+    <div class="modal">
+      <h2 id="form-title"></h2>
+      <label for="form-username">Login username</label>
+      <input type="text" id="form-username" placeholder="Login username" autocomplete="off">
+      <label for="form-password">Password</label>
+      <input type="password" id="form-password" placeholder="Password" autocomplete="new-password">
+      <label for="form-region">Region</label>
+      <select id="form-region">
+        <option value="NA">NA</option>
+        <option value="EUW">EUW</option>
+        <option value="EUNE">EUNE</option>
+        <option value="KR">KR</option>
+        <option value="JP">JP</option>
+        <option value="BR">BR</option>
+        <option value="LAN">LAN</option>
+        <option value="LAS">LAS</option>
+        <option value="OCE">OCE</option>
+        <option value="TR">TR</option>
+        <option value="RU">RU</option>
+        <option value="PH">PH</option>
+        <option value="SG">SG</option>
+        <option value="TH">TH</option>
+        <option value="TW">TW</option>
+        <option value="VN">VN</option>
+        <option value="ME">ME</option>
+      </select>
+      <label for="form-note">Note</label>
+      <input type="text" id="form-note" placeholder="Note">
+      <div id="form-error" class="form-error"></div>
+      <div class="modal-buttons">
+        <button id="form-save">SAVE</button>
+        <button id="form-cancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script src="vendor/gsap.min.js"></script>
+  <script src="vendor/Flip.min.js"></script>
+  <script src="fake-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

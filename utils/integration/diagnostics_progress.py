@@ -1,6 +1,5 @@
 """Responsive native progress window for a tray diagnostic run."""
 
-import ctypes
 import threading
 import time
 from ctypes import wintypes

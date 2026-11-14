@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 import os
 import shutil
 import tempfile
@@ -50,6 +51,7 @@ log = get_logger()
 
 _INFO_KEY = "meta/info.json"
 _PREVIEW_IMAGES = (("META/image.png", ".png"), ("META/image.webp", ".webp"))
+
 
 def _folder_file_sizes(folder: Path) -> dict[str, int]:
     """{relative path: size} of every file under *folder*.
@@ -139,6 +141,7 @@ class ModStorageService:
     # Beside a stored archive, under its name
     IMAGE_SIDECAR_SUFFIXES = (".png", ".webp")
     DESCRIPTION_SIDECAR_SUFFIX = ".txt"
+    ORIGIN_SIDECAR_SUFFIX = ".origin.json"
     MAX_MOD_IMAGE_BYTES = 5 * 1024 * 1024
     TARGET_METADATA = saved_manifest.TARGET_METADATA
     LEGACY_TARGET_METADATA = saved_manifest.LEGACY_TARGET_METADATA
@@ -391,8 +394,24 @@ class ModStorageService:
             return []
         return [
             stored.with_suffix(suffix)
-            for suffix in (*cls.IMAGE_SIDECAR_SUFFIXES, cls.DESCRIPTION_SIDECAR_SUFFIX)
+            for suffix in (*cls.IMAGE_SIDECAR_SUFFIXES, cls.DESCRIPTION_SIDECAR_SUFFIX, cls.ORIGIN_SIDECAR_SUFFIX)
         ]
+
+    @classmethod
+    def read_origin(cls, stored: Path) -> Optional[dict]:
+        """Return the origin dict from the sidecar beside *stored*, or None."""
+        origin_path = stored.with_suffix(cls.ORIGIN_SIDECAR_SUFFIX)
+        if not origin_path.exists():
+            return None
+        try:
+            return json.loads(origin_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    def write_origin(self, stored: Path, origin: dict) -> None:
+        """Write *origin* as JSON (utf-8, indent 2) beside *stored*."""
+        origin_path = stored.with_suffix(self.ORIGIN_SIDECAR_SUFFIX)
+        origin_path.write_text(json.dumps(origin, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def saved_mods(self, kind: Optional[str] = None) -> List[SavedMod]:
         """Every saved mod (of *kind*: "skins" or a category), whether LTK
@@ -948,9 +967,6 @@ class ModStorageService:
         )
         self._champion_listing_cache[champion_id_int] = (time.monotonic(), entries)
         return list(entries)
-
-    def has_mods_for_skin(self, skin_id: int | str) -> bool:
-        return bool(self.list_mods_for_skin(skin_id))
 
     def categories_with_mods(self) -> List[str]:
         """Root categories holding at least one saved mod, in menu order (a

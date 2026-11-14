@@ -101,9 +101,6 @@ class PenguLoaderIntegrationTests(unittest.TestCase):
     def test_legacy_cleanup_and_packaging_exclusions_are_wired(self):
         source = Path(pengu_loader.__file__).read_text(encoding='utf-8')
         spec_source = Path('Rose.spec').read_text(encoding='utf-8')
-        program_source = Path(
-            'vendor/PenguLoader-1.1.6/loader/Program.cs'
-        ).read_text(encoding='utf-8')
         updater_source = Path(
             'vendor/PenguLoader-1.1.6/loader/Main/Updater.cs'
         ).read_text(encoding='utf-8')
@@ -284,7 +281,6 @@ class PenguLoaderIntegrationTests(unittest.TestCase):
         self.assertIn('stdout details', message)
         self.assertIn('stderr details', message)
         self.assertIn('signed_exit_code=-24', message)
-
 
     @patch.object(pengu_loader, '_is_available', return_value=True)
     @patch.object(pengu_loader.subprocess, 'run')

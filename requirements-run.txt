@@ -1,0 +1,24 @@
+# Requires Python >= 3.11
+
+# App requirements
+# Security: All dependencies pinned to specific versions to prevent supply chain attacks
+psutil==5.9.8
+requests==2.31.0
+urllib3==2.0.7
+websocket-client==1.7.0
+websockets==12.0
+Pillow==10.4.0
+pystray==0.19.5
+xxhash==4.0.1
+zstandard==0.25.0
+packaging==26.3
+pywebview==6.2.1
+pythonnet==3.2.1
+clr_loader==0.3.1
+cffi==2.1.1
+pycparser==3.12
+proxy_tools==0.1.0
+bottle==0.13.4
+typing_extensions==4.16.0
+
+# Build requirements

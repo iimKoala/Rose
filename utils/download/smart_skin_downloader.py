@@ -264,19 +264,6 @@ class SmartSkinDownloader:
         
         return results
     
-    def get_download_stats(self) -> Dict[str, int]:
-        """Get statistics about downloaded skins (total IDs per champion)"""
-        if not self.target_dir.exists():
-            return {}
-        
-        stats = {}
-        for champion_dir in self.target_dir.iterdir():
-            if champion_dir.is_dir():
-                skin_files = list(champion_dir.glob("*.zip")) + list(champion_dir.glob("*.fantome"))
-                stats[champion_dir.name] = len(skin_files)
-
-        return stats
-    
     def get_detailed_stats(self) -> Dict[str, int]:
         """
         Get detailed statistics categorizing base skins and chromas
@@ -333,7 +320,7 @@ def download_skins_smart(target_dir: Path = None, force_update: bool = False,
                     f"{current_detailed['total_ids']} total skin IDs")
         
         # Download skins with smart batching
-        results = downloader.download_all_skins_smart(force_update, max_champions)
+        downloader.download_all_skins_smart(force_update, max_champions)
         
         # Report final results with detailed stats
         final_detailed = downloader.get_detailed_stats()

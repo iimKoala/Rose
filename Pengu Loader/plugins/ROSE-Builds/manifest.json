@@ -1,0 +1,8 @@
+{
+  "name": "ROSE-Builds",
+  "version": "1.0.0",
+  "description": "Champ select builds from onetricks.gg - the top 3 players' runes, spells and items, imported for you",
+  "author": "Rose Team",
+  "main": "index.js",
+  "enabled": true
+}

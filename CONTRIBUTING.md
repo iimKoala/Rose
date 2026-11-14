@@ -236,13 +236,11 @@ Rose/
 │   │   └── hash_updater.py
 │   ├── integration/        # External integrations
 │   │   ├── pengu_loader.py
-│   │   ├── tray_manager.py
-│   │   └── tray_settings.py
+│   │   └── tray_manager.py
 │   ├── system/             # System utilities
 │   │   ├── admin_utils.py
 │   │   ├── win32_base.py
-│   │   ├── window_utils.py
-│   │   └── resolution_utils.py
+│   │   └── window_utils.py
 │   └── threading/          # Threading utilities
 │       └── thread_manager.py
 │

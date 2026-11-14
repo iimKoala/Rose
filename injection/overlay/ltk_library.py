@@ -97,6 +97,10 @@ class LtkLibrary:
     *game_dir* is the injection's League game folder: check_mod does not run
     without one."""
 
+    # Rose's bridge in LTK Manager has no check command (an older LeagueToolFlop.dll answers "unknown:
+    # check_mod_health"): no check can work until Rose restarts, so none starts LTK Manager again
+    check_missing = False
+
     def __init__(self, host: LtfHost, game_dir: Optional[Path] = None) -> None:
         self.host = host
         self.game_dir = game_dir
@@ -177,7 +181,7 @@ class LtkLibrary:
         "problems": [{"rule", "title", "description"}] that make the game
         reject the mod, and "ltkId" once the entry is kept}.
         """
-        if self.game_dir is None or not Path(mod).exists():
+        if self.game_dir is None or LtkLibrary.check_missing or not Path(mod).exists():
             return None
         try:
             _give_way(stop)
@@ -199,6 +203,8 @@ class LtkLibrary:
             log.info(f"[MODCHECK] Not checking {display_name}, it stays in Rose for now: {e}")
         except (BridgeUnavailable, BridgeCommandError, OSError, ValueError) as e:
             log.warning(f"[MODCHECK] LTK Manager could not check {display_name}: {e}")
+            if "unknown: check_mod_health" in str(e):
+                LtkLibrary.check_missing = True
         return None
 
     @staticmethod

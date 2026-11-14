@@ -415,7 +415,7 @@ from state import AppStatus
 from utils.core.logging import get_logger, log_success
 from utils.core.issue_reporter import report_issue
 from utils.threading.thread_manager import create_daemon_thread
-from config import APP_VERSION, MAIN_LOOP_FORCE_QUIT_TIMEOUT_S, get_config_option, set_config_option
+from config import APP_VERSION, MAIN_LOOP_FORCE_QUIT_TIMEOUT_S, get_config_option
 from injection.config.config_manager import ConfigManager
 from injection.game.game_detector import GameDetector
 from injection.mods.ltk_sync import start_saved_mods_sync
@@ -579,6 +579,7 @@ def _update_registry_version() -> None:
                 winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
         except Exception:
             pass
+
 
 def _schedule_restart() -> bool:
     """Spawn a detached helper that relaunches Rose after this process exits.

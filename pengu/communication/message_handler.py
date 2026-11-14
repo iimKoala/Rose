@@ -6,8 +6,6 @@ Routes and handles different WebSocket message types
 """
 
 import asyncio
-import base64
-import binascii
 import json
 import logging
 import os
@@ -35,6 +33,10 @@ from utils.core.issue_reporter import clear_issues, in_this_session, parse_stamp
 from utils.core.safe_extract import MOD_ARCHIVE_SUFFIXES
 from utils.core.utilities import get_base_skin_id_for_chroma
 from ui.handlers.randomization_handler import cancel_random_mode_for_selection
+from .account_handlers import AccountHandlersMixin
+from .build_handlers import BuildHandlersMixin
+from .mod_store_handlers import ModStoreHandlersMixin
+from .reconnect_handlers import ReconnectHandlersMixin
 from utils.system.admin_utils import (
     is_admin,
     is_registered_for_autostart,
@@ -84,6 +86,19 @@ BACKGROUND_MESSAGE_TYPES = frozenset({
     "delete-category-mods",
     "rename-champion-mod",
     "rename-category-mod",
+    # Champ select builds: reads onetricks.gg pages, which takes seconds; off the bridge's event loop
+    "builds-get",
+    # Mod store: imports, LTK checks and LCU lookups take seconds; off the bridge's event loop
+    "mod-store-install",
+    "mod-store-installed",
+    "mod-store-skins",
+    "mod-store-champions",
+    "mod-store-check",
+    "mod-store-health",  # Rose's checker on every installed store mod: seconds each
+    "mod-store-fix",
+    "mod-store-open",
+    "mod-store-delete",
+    "mod-store-rename",
 })
 
 
@@ -231,7 +246,7 @@ def _choose_mod_image_file() -> Optional[Path]:
                 pass
 
 
-class MessageHandler:
+class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersMixin, ReconnectHandlersMixin):
     """Handles routing and processing of WebSocket messages"""
     
     def __init__(
@@ -446,10 +461,22 @@ class MessageHandler:
             self._handle_party_remove_peer(payload)
         elif payload_type == "party-get-state":
             self._handle_party_get_state(payload)
+        # Account switching messages: routed in account_handlers.py
+        elif self._route_account_message(payload_type, payload):
+            pass
+        # Mod store messages (the Rose mod store window): routed in mod_store_handlers.py
+        elif self._route_mod_store_message(payload_type, payload):
+            pass
+        # Champ select builds (the ROSE-Builds plugin): routed in build_handlers.py
+        elif self._route_build_message(payload_type, payload):
+            pass
+        # The reconnect screen's drop-down (the ROSE-ReconnectMods plugin): routed in reconnect_handlers.py
+        elif self._route_reconnect_message(payload_type, payload):
+            pass
         elif payload.get("skin"):
             # Handle skin detection message
             self._handle_skin_detection(payload)
-    
+
     def _handle_chroma_log(self, payload: dict) -> None:
         """Forward structured plugin logs at their requested severity."""
         source = str(payload.get("source") or "UnknownPlugin")[:64]
@@ -1525,52 +1552,6 @@ class MessageHandler:
         # Auto-select historic mod if available and not already selected
         if historic_announcer_path and not getattr(self.shared_state, 'selected_announcer_mod', None):
             self._auto_select_historic_mod("announcer", historic_announcer_path, announcers)
-    
-    def _handle_request_others(self, payload: dict) -> None:
-        """Return the list of others"""
-        if not self.mod_storage:
-            return
-        
-        try:
-            others = self.mod_storage.list_mods_for_category(self.mod_storage.CATEGORY_OTHERS)
-        except Exception as exc:
-            log.error(f"[SkinMonitor] Failed to list others: {exc}")
-            others = []
-        
-        # Get historic mod and add it to response
-        historic_other_paths = None
-        try:
-            from utils.core.mod_historic import get_historic_mod
-            historic_other_paths = get_historic_mod("other")
-            # Convert to list if it's a single string (legacy format)
-            if isinstance(historic_other_paths, str):
-                historic_other_paths = [historic_other_paths]
-        except Exception as e:
-            log.warning('[SkinMonitor] Could not load saved other mods selection; it will not be restored: %s', e)
-        
-        response_payload = {
-            "type": "others-response",
-            "others": others,
-            "historicMod": historic_other_paths,  # List of historic mod identifiers (or None)
-            "timestamp": int(time.time() * 1000),
-        }
-        self._send_response(json.dumps(response_payload))
-        
-        # Auto-select historic mods if available and not already selected
-        selected_other_mods = getattr(self.shared_state, 'selected_other_mods', None)
-        if not selected_other_mods:
-            # Fallback to legacy single mod
-            selected_other_mod = getattr(self.shared_state, 'selected_other_mod', None)
-            if selected_other_mod:
-                selected_other_mods = [selected_other_mod]
-        if historic_other_paths and (not selected_other_mods or len(selected_other_mods) == 0):
-            # Handle multiple historic other mods
-            if isinstance(historic_other_paths, list):
-                for historic_path in historic_other_paths:
-                    self._auto_select_historic_mod("other", historic_path, others)
-            else:
-                # Legacy single mod format
-                self._auto_select_historic_mod("other", historic_other_paths, others)
     
     def _handle_select_skin_mod(self, payload: dict) -> None:
         """Handle mod selection for injection over hovered skin"""
@@ -2871,6 +2852,24 @@ class MessageHandler:
         injection_manager = getattr(self, "injection_manager", None)
         return phase in self._MOD_CHECK_BUSY_PHASES or bool(getattr(injection_manager, "_injection_in_progress", False))
 
+    def _check_with_rose(self, overlay, mod_path: Path, name: str) -> Optional[dict]:
+        """Rose's own check of an added mod, before LTK Manager's (rose-mod-check.exe: LTK Manager's
+        rules and repair, with LTK Manager closed).
+
+        It repairs Rose's copy before LTK Manager's library takes it, and still checks where LTK
+        Manager's own check is missing (LTK Manager 1.33.0 answers "unknown: check_mod_health").
+        None when it did not run.
+        """
+        try:
+            with stored_skin_rewrite():
+                result = overlay.check_mod(mod_path, name)
+                if result and result.get("repaired"):
+                    self.mod_storage.refresh_mod_hashes(mod_path)
+            return result
+        except Exception as e:  # noqa: BLE001 - a check must never fail the import
+            log.warning(f"[MODCHECK] Rose's checker could not check {name}: {e}")
+            return None
+
     def _check_imported_mods(self, imported: list[dict], errors: list[dict], remove, skins: bool = False) -> list[dict]:
         """Make each just-imported custom skin (*skins*: not a map, font...
         mod) match the base skin (_fix_base_skin), have LTK Manager check and
@@ -2916,11 +2915,18 @@ class MessageHandler:
                 continue
             saved = self.mod_storage.saved_mod(item["relativePath"])
             mod_path, name = Path(item["path"]), item.get("modName") or Path(item["path"]).name
+            offline = self._check_with_rose(overlay, mod_path, name)
             try:
-                if saved and saved.pending:
+                if offline and offline.get("problems"):
+                    result = offline  # the game rejects it: LTK Manager's library never takes it
+                elif saved and saved.pending:
                     result = library.check_mod(mod_path, name, partial(self.mod_storage.attach_ltk_entry,
                                                                        item["relativePath"]),
                                                stop=self._ltk_wanted_by_game)
+                elif offline is not None:
+                    # a custom skin stays Rose's, and Rose's checker ran LTK Manager's own rules and repair on
+                    # it: LTK Manager is not started to say the same again
+                    result = offline
                 else:
                     with stored_skin_rewrite():
                         result = library.check_mod(mod_path, name, stop=self._ltk_wanted_by_game)
@@ -2929,6 +2935,8 @@ class MessageHandler:
             except Exception as e:  # noqa: BLE001 - a check must never fail the import
                 log.warning(f"[MODCHECK] Could not check {item.get('modName')}: {e}")
                 result = None
+            if result is None:
+                result = offline  # LTK Manager's check did not run: Rose's verdict stands
             if result and result.get("problems"):
                 rejection = _rejected_import(item, result)
                 try:
@@ -3449,7 +3457,6 @@ class MessageHandler:
             if not party_manager:
                 # Initialize party manager
                 from party.core.party_manager import PartyManager
-                from lcu import LCU
 
                 # Get LCU instance from skin_scraper
                 lcu = self.skin_scraper.lcu if self.skin_scraper else None

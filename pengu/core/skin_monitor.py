@@ -152,10 +152,6 @@ class PenguSkinMonitorThread(threading.Thread):
     # ---------------------------------------------------------- JS Integration
     # These methods delegate to broadcaster for backward compatibility
     
-    def _broadcast_skin_state(self, skin_name: str, skin_id: Optional[int]) -> None:
-        """Broadcast skin state (delegates to broadcaster)"""
-        self.broadcaster.broadcast_skin_state(skin_name, skin_id)
-
     def _broadcast_chroma_state(self) -> None:
         """Broadcast chroma state (delegates to broadcaster)"""
         self.broadcaster.broadcast_chroma_state()

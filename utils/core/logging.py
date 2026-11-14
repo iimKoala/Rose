@@ -7,7 +7,6 @@ Logging configuration and utilities
 # Standard library imports
 import os
 import queue
-import re
 import sys
 import threading
 import time
@@ -33,10 +32,12 @@ from config import (
 TRACE = 5
 logging.addLevelName(TRACE, "TRACE")
 
+
 def trace(self, message, *args, **kwargs):
     """Log a trace message (ultra-detailed, below DEBUG)"""
     if self.isEnabledFor(TRACE):
         self._log(TRACE, message, args, **kwargs)
+
 
 # Add trace() method to Logger class
 logging.Logger.trace = trace
@@ -44,6 +45,7 @@ logging.Logger.trace = trace
 # Global log mode (set by setup_logging)
 _CURRENT_LOG_MODE = 'customer'
 _NAMED_LOGGERS: Dict[str, logging.Logger] = {}
+
 
 def get_log_mode() -> str:
     """Get the current logging mode"""
@@ -155,6 +157,7 @@ class SizeRotatingCompositeHandler(logging.Handler):
             super().close()
         except Exception:
             pass
+
 
 def setup_logging(log_mode: str = 'customer', *, write_logs: bool = True):
     """
@@ -308,6 +311,7 @@ def setup_logging(log_mode: str = 'customer', *, write_logs: bool = True):
             
             max_bytes = int(LOG_MAX_FILE_SIZE_MB_DEFAULT * 1024 * 1024)
             log_file = logs_dir / f"rose_{timestamp}.log"
+
             def _factory_plain(p: Path):
                 return logging.FileHandler(p, encoding='utf-8')
             file_handler = SizeRotatingCompositeHandler(log_file, _factory_plain, max_bytes)
@@ -413,7 +417,6 @@ def setup_logging(log_mode: str = 'customer', *, write_logs: bool = True):
     # Disable SSL warnings for LCU (self-signed cert)
     urllib3.disable_warnings(InsecureRequestWarning)
     
-
 
 class _ThreadExceptionLogger:
     """``threading.excepthook`` that logs the traceback and then delegates to the previous hook."""
@@ -545,29 +548,6 @@ def cleanup_logs():
     except Exception as e:
         # Don't log this error to avoid recursion
         print(f"Warning: Failed to cleanup logs: {e}", file=sys.stderr)
-
-
-def _clear_log_file(log_file: Path):
-    """Clear the content of a log file"""
-    try:
-        if log_file.exists():
-            # Truncate the file to 0 bytes
-            with open(log_file, 'w', encoding='utf-8') as f:
-                f.write("")
-            
-            # Also clean up backup files
-            for backup_file in log_file.parent.glob(f"{log_file.name}.*"):
-                if backup_file.is_file():
-                    backup_file.unlink()
-                    
-    except Exception:
-        # Silently ignore cleanup errors
-        pass
-
-
-def cleanup_logs_on_startup():
-    """Clean up old log files when the application starts"""
-    cleanup_logs()
 
 
 # ==================== Pretty Logging Helpers ====================

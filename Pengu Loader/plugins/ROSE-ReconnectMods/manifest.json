@@ -1,0 +1,8 @@
+{
+  "name": "ROSE-ReconnectMods",
+  "version": "1.0.0",
+  "description": "Reconnect screen: choose which of this game's mods to disable before you reconnect",
+  "author": "Rose Team",
+  "main": "index.js",
+  "enabled": true
+}

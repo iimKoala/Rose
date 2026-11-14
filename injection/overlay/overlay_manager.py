@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import os
 import re
 import shutil
 import threading
@@ -24,6 +25,7 @@ from injection.game.reconnect import kill_game, reconnect_to_game
 from utils.core.logging import get_logger, log_event
 from utils.core.issue_reporter import report_issue
 from ..tools.bridge import BridgeCommandError, BridgeUnavailable
+from ..tools import mod_checker
 from ..mods.fantome import fantome_display_name, write_fantome_zip
 from ..mods.fingerprint import mod_fingerprint
 from ..mods.ltk_ref import split_mod_names
@@ -49,6 +51,7 @@ from .ltf_session import (
     archive_for_ltk,
 )
 from .ltk_data import LtkLogTail, entry_name
+from .reconnect_choice import ReconnectChoiceMixin
 from config import (
     GAME_EXECUTABLE_NAMES,
     PROCESS_MONITOR_SLEEP_S,
@@ -172,7 +175,29 @@ def _ltk_log_time(stamp: str) -> Optional[float]:
     return moment.timestamp() + (float(f"0.{fraction}") if fraction.isdigit() else 0.0)
 
 
-class OverlayManager:
+def _verdict_summary(verdict: dict) -> str:
+    counts = verdict.get("counts") or {}
+    return ", ".join(f"{counts.get(key, 0)} {key}" for key in ("fatals", "errors", "warnings")) + \
+        f", {verdict.get('fixable', 0)} fixable"
+
+
+def _incident_mods(incident_id: str) -> str:
+    """The mods LTK Manager's incident file lists as in the game (its "suspects"), up to 3; "" if unknown."""
+    if not re.fullmatch(r"[0-9A-Za-z_-]+", incident_id):  # an id like 2026-11-10T03-09-34, never a path
+        return ""
+    path = Path(os.path.expandvars(LTK_INCIDENTS_DIR)) / f"{incident_id}.json"
+    try:
+        suspects = json.loads(path.read_text(encoding="utf-8")).get("suspects") or []
+    except (OSError, ValueError, AttributeError):
+        return ""
+    # Mod names are the mod authors' text: no control characters (a newline would fake a Troubleshooting entry)
+    names = [re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+", " ", str(s.get("displayName") or "")).strip()[:80]
+             for s in suspects if isinstance(s, dict)]
+    names = [name for name in names if name]
+    return ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+
+
+class OverlayManager(ReconnectChoiceMixin):
     """Manages the LTF session: install mods, run LTK Manager's patcher"""
 
     def __init__(self, tools_dir: Path, mods_dir: Path, game_dir: Optional[Path], process_manager=None):
@@ -206,6 +231,68 @@ class OverlayManager:
         Manager (LtfHost.busy)."""
         with self._early_session_lock:
             return self._early_session is not None or self._countdown_staging_open
+
+    # -- mod check -----------------------------------------------------------
+    def check_mod(self, folder: Path, display_name: str, repair: bool = True) -> Optional[dict]:
+        """Check a mod the user adds with LTK Manager's own rules, and repair what it can, without opening LTK Manager.
+
+        rose-mod-check.exe (injection/tools, built from LTK Manager's rules in
+        native/rose-mod-check) finds what makes the game drop or reject a mod
+        (an audio bank of an old version, a bin type a patch changed, another
+        skin's model...), and repairs a stored .fantome the way LTK Manager
+        does. Run on a mod as it is added, the user learns then, not in a game,
+        that LTK Manager will turn it off, and a repairable one is repaired once.
+
+        With repair=False it only checks (the Mod store's Installed list).
+
+        None when it did not run (the checker is missing or failed). Otherwise
+        {"health": LTK's word before any repair, "repaired": fixes applied,
+        "fixable": problems left that LTK Manager can repair, "problems":
+        [{"rule", "title", "description"}] the game still rejects and LTK
+        Manager cannot repair}.
+        """
+        staging = None
+        try:
+            archive = folder  # an archive (.fantome, .zip, .modpkg) is checked where it is
+            if not folder.is_file():
+                # A mod stored as a folder is packed the way LTK Manager would import it
+                staging = self.host.staging_root() / f"check-{uuid.uuid4().hex}"
+                staging.mkdir(parents=True, exist_ok=True)
+                archive = archive_for_ltk(folder, staging / f"{folder.name}.fantome")
+            verdict = mod_checker.check_mod_file(archive, self.game_dir)
+        except (OSError, ValueError) as e:
+            log.warning(f"[MODCHECK] Could not check {display_name}: {e}")
+            return None
+        finally:
+            if staging is not None:
+                shutil.rmtree(staging, ignore_errors=True)
+        if verdict is None:
+            return None
+        health = str(verdict.get("health") or "")
+        log.info(f"[MODCHECK] LTK Manager's rules on {display_name}: {health or 'unknown'} ({_verdict_summary(verdict)})")
+        repaired = 0
+        # a "healthy" mod can still have a small fixable problem (a sound bank without an id): repair that too
+        if repair and (health == "repairable" or int(verdict.get("fixable") or 0) > 0):
+            if staging is None:
+                after = mod_checker.repair_mod_file(folder, self.game_dir)
+                if after is not None and int(after.get("repaired") or 0) > 0:
+                    repaired = int(after["repaired"])
+                    verdict = after
+                    log.info(f"[MODCHECK] Repaired {repaired} problem(s) in {display_name} ({_verdict_summary(verdict)} left)")
+            else:
+                log.info(f"[MODCHECK] {display_name} is stored as a folder: its problems are not repaired")
+        problems = mod_checker.rejected(verdict)
+        if not problems and int(verdict.get("fixable") or 0) > 0:
+            log.warning(f"[MODCHECK] {display_name} still has {verdict.get('fixable')} problem(s) LTK Manager can repair")
+        for problem in problems:
+            log.warning(f"[MODCHECK] {display_name} will not work in game: {problem['title']} - "
+                        f"{problem['description']}")
+        result = {"health": health, "repaired": repaired, "fixable": int(verdict.get("fixable") or 0),
+                  "problems": problems}
+        flaws = mod_checker.warnings(verdict)
+        if flaws:
+            result["warnings"] = flaws  # only when there are some: the mod plays, with something missing
+        return result
 
     def _new_session(self, ltf: LtfSession) -> dict:
         return {
@@ -1205,11 +1292,13 @@ class OverlayManager:
 
     def _run_session(self, session: dict, stop_callback: Optional[Callable] = None) -> int:
         """Serve the overlay until the game exits."""
+        self._running_session = session  # the reconnect screen's drop-down asks about it (reconnect_choice.py)
         try:
             ticks = 0
             while True:
                 if session["ltf"].ended:
                     break
+                self._serve_reconnect_screen(session)
                 if stop_callback and stop_callback():
                     game = self._running_game()
                     if game is not None:
@@ -1242,6 +1331,7 @@ class OverlayManager:
             if not session["error"]:
                 session["error"] = str(e)
         finally:
+            self._running_session = None
             stopped = self._stopped_by_rose()
             self._end_session(session)
 
@@ -1473,7 +1563,18 @@ class OverlayManager:
             where = f"{LTK_INCIDENTS_DIR}\\{incident_id}.json"
             log.error(f"[INJECT] LTK Manager recorded an incident: {title} ({verdict}), see {where}")
             incident_repeats_a_report = disabled or session.get("not_attached_reported")
-            if not incident_repeats_a_report:
+            mods = _incident_mods(incident_id) if verdict == "MissingData" else ""
+            if not incident_repeats_a_report and mods:
+                # The game crashed on a mod's file, not on the injection: say so, and which mods were in it
+                report_issue(
+                    "MOD_CRASHED_GAME",
+                    "error",
+                    f"The game crashed while loading a mod. Mods in this game: {mods}",
+                    details={"incident": where},
+                    hint="A mod made for an older League patch can crash the game. Open Mod store > Installed: "
+                         f"a mod that needs a repair has a Fix button. Or turn the mod off. LTK Manager's report: {where}",
+                )
+            elif not incident_repeats_a_report:
                 report_ltf_failure(f"LTK Manager recorded an incident after the game: {title} ({verdict}; {where})")
         slow = session.get("ltk_slow_mod_check_s")
         if slow is not None and not session.get("slow_mod_check_reported"):

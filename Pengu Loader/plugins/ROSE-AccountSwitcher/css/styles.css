@@ -1,0 +1,382 @@
+/* ROSE AccountSwitcher Styles */
+
+@keyframes roseFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes roseFlyoutIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes roseFlyoutOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-8px) scale(0.98); }
+}
+
+@keyframes roseItemIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes accountPulse {
+  0%   { filter: drop-shadow(0 0 0 rgba(200, 170, 110, 0.00)); opacity: 0.95; }
+  50%  { filter: drop-shadow(0 0 6px rgba(200, 170, 110, 0.80)) drop-shadow(0 0 12px rgba(200, 170, 110, 0.35)); opacity: 1.00; }
+  100% { filter: drop-shadow(0 0 0 rgba(200, 170, 110, 0.00)) drop-shadow(0 0 0 rgba(200, 170, 110, 0.00)); opacity: 0.95; }
+}
+
+#rose-account-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+#rose-account-panel .backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+  background: transparent;
+  pointer-events: all;
+}
+
+#rose-account-flyout {
+  min-width: 380px !important;
+  max-width: 420px !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  color: #cdbe91;
+  font-family: "Beaufort for LOL", serif;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  box-shadow: none !important;
+  border: none !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  transform-origin: top center !important;
+}
+
+#rose-account-flyout::before,
+#rose-account-flyout::after {
+  display: none !important;
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  content: none !important;
+}
+
+#rose-account-flyout lc-flyout-content,
+#rose-account-flyout .lc-flyout-content {
+  background: #010a13 !important;
+  background-color: #010a13 !important;
+  background-image: none !important;
+  border-radius: 4px !important;
+  padding: 20px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border: 1px solid rgba(200, 170, 110, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+  margin: 0 !important;
+  animation: roseFlyoutIn 180ms ease-out;
+}
+
+#rose-account-panel.closing .lc-flyout-content {
+  animation: roseFlyoutOut 140ms ease-in forwards;
+}
+
+#rose-account-panel.closing .backdrop {
+  pointer-events: none;
+}
+
+/* Header */
+.account-header {
+  text-align: center;
+  width: 100%;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(200, 170, 110, 0.2);
+}
+
+.account-header h2 {
+  font-size: 18px;
+  font-weight: bold;
+  color: #c8aa6e;
+  margin: 0 0 4px 0;
+  letter-spacing: 0.5px;
+}
+
+.account-header .account-count {
+  font-size: 12px;
+  color: #7d7d7d;
+}
+
+/* Account list */
+.account-list-container {
+  width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.account-list-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.account-list-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.account-list-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(200, 155, 60, 0.3), rgba(70, 55, 20, 0.8));
+  border-radius: 4px;
+}
+
+.account-list-container::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(200, 155, 60, 0.4), rgba(70, 55, 20, 0.9));
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  border: 1px solid transparent;
+  animation: roseItemIn 200ms ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+.account-item:hover {
+  background: rgba(200, 170, 110, 0.08);
+  border-color: rgba(200, 170, 110, 0.15);
+  transform: translateX(2px);
+}
+
+.account-item.active {
+  background: rgba(200, 170, 110, 0.12);
+  border-color: rgba(200, 170, 110, 0.3);
+}
+
+.account-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c8aa6e, #785a28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: #010a13;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.account-emblem {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  background: transparent;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.account-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-summoner-name {
+  font-size: 14px;
+  color: #c8aa6e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.account-region {
+  font-size: 10px;
+  color: #5c5b56;
+  background: rgba(92, 91, 86, 0.2);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.account-rank {
+  font-size: 12px;
+  color: #f0e6d2;
+}
+
+.account-level {
+  font-size: 11px;
+  color: #a09b8c;
+}
+
+.account-note {
+  font-size: 11px;
+  color: #a09b8c;
+}
+
+.active-badge {
+  font-size: 10px;
+  color: #c8aa6e;
+  background: rgba(200, 170, 110, 0.15);
+  padding: 2px 8px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Empty state */
+.account-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #7d7d7d;
+  font-size: 13px;
+}
+
+.account-empty .empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+/* Buttons */
+.account-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.account-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: "Beaufort for LOL", serif;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  border: none;
+}
+
+.account-btn-primary {
+  background: linear-gradient(135deg, #c8aa6e, #a07828);
+  color: #010a13;
+  font-weight: bold;
+}
+
+.account-btn-primary:hover {
+  background: linear-gradient(135deg, #d4b878, #b08838);
+}
+
+.account-btn-secondary {
+  background: rgba(200, 170, 110, 0.1);
+  color: #c8aa6e;
+  border: 1px solid rgba(200, 170, 110, 0.3);
+}
+
+.account-btn-secondary:hover {
+  background: rgba(200, 170, 110, 0.2);
+}
+
+.account-btn-danger {
+  background: transparent;
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  padding: 4px 8px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.account-btn-danger:hover {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: #ff6b6b;
+}
+
+/* Status messages */
+.status-message {
+  text-align: center;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  animation: roseFadeIn 160ms ease-out;
+}
+
+.status-success {
+  background: rgba(94, 184, 108, 0.15);
+  color: #5eb86c;
+  border: 1px solid rgba(94, 184, 108, 0.3);
+}
+
+.status-error {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+/* Navigation icon */
+.rose-account-nav {
+  cursor: pointer;
+}
+
+.rose-account-nav .menu-item-icon {
+  transition: filter 0.2s ease;
+}
+
+.rose-account-nav:hover .menu-item-icon {
+  animation: accountPulse 1.5s ease-in-out infinite;
+}
+
+/* Loading state */
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(200, 170, 110, 0.3);
+  border-top-color: #c8aa6e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes roseActiveGlow {
+  from { box-shadow: 0 0 0 0 rgba(200, 170, 110, 0.5); }
+  to   { box-shadow: 0 0 0 6px rgba(200, 170, 110, 0); }
+}
+
+.account-item.active .account-avatar {
+  animation: roseActiveGlow 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #rose-account-panel,
+  #rose-account-panel * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

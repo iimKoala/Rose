@@ -40,6 +40,8 @@ import os
 injection_binaries = [
     'injection/tools/ltk_launcher.exe',
     'injection/tools/LeagueToolFlop.dll',
+    # LTK Manager's mod check without LTK Manager, built from native/rose-mod-check (GPL-3.0-or-later)
+    'injection/tools/rose-mod-check.exe',
 ]
 # Data files (text files, etc.)
 injection_data_files = [
@@ -244,7 +246,6 @@ hiddenimports = [
     'utils.system.admin_utils',
     'utils.system.win32_base',
     'utils.system.window_utils',
-    'utils.system.resolution_utils',
     'utils.download',
     'utils.download.repo_downloader',
     'utils.download.skin_downloader',
@@ -254,7 +255,6 @@ hiddenimports = [
     'utils.integration',
     'utils.integration.tray_manager',
     'utils.integration.diagnostics_progress',
-    'utils.integration.tray_settings',
     'utils.integration.pengu_loader',
     'utils.integration.startup_verifier',
     'utils.threading',

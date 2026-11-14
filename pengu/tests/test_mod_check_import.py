@@ -57,8 +57,10 @@ class ModCheckCase(unittest.TestCase):
         self.library = self.library_class.return_value
         self.addCleanup(library_class.stop)
 
-    def handler(self, phase="Lobby", injecting=False):
-        manager = SimpleNamespace(injector=SimpleNamespace(overlay_manager=MagicMock()),
+    def handler(self, phase="Lobby", injecting=False, rose_verdict=None):
+        overlay = MagicMock()
+        overlay.check_mod.return_value = rose_verdict  # Rose's own checker; None: it did not run
+        manager = SimpleNamespace(injector=SimpleNamespace(overlay_manager=overlay),
                                   _injection_in_progress=injecting)
         instance = object.__new__(message_handler.MessageHandler)
         instance.injection_manager = manager
@@ -211,6 +213,64 @@ class ModCheckOnImportTests(ModCheckCase):
 
         self.assertEqual(self.library.check_mod.call_count, 1)
         self.assertEqual(len(kept), 2)
+
+
+class RoseCheckFirstTests(ModCheckCase):
+    """Rose's own checker (rose-mod-check: LTK Manager's rules and repair, LTK Manager closed) runs first"""
+
+    def test_a_mod_roses_checker_rejects_never_reaches_ltk_manager(self):
+        problem = {"rule": "audio/bank-id", "title": "Bank", "description": "An audio bank the game will not load"}
+        errors, remove = [], MagicMock()
+
+        kept = self.handler(rose_verdict={"health": "unrepairable", "repaired": 0, "problems": [problem]})\
+            ._check_imported_mods(self.imported, errors, remove)
+
+        self.assertEqual(kept, [])
+        self.assertEqual((errors[0]["code"], errors[0]["reason"]), ("ltk_rejected", "An audio bank the game will not load"))
+        remove.assert_called_once()
+        self.library.check_mod.assert_not_called()
+
+    def test_roses_verdict_stands_when_ltk_managers_check_does_not_run(self):
+        verdict = {"health": "repairable", "repaired": 28, "problems": []}
+        self.library.check_mod.return_value = None  # LTK Manager 1.33.0: "unknown: check_mod_health"
+
+        kept = self.handler(rose_verdict=verdict)._check_imported_mods(self.imported, [], MagicMock())
+
+        self.assertEqual(kept[0]["health"], verdict)
+        self.library.check_mod.assert_called_once()
+
+    def test_ltk_managers_verdict_wins_when_it_runs(self):
+        ltk = {"health": "healthy", "repaired": 0, "problems": []}
+        self.library.check_mod.return_value = ltk
+
+        kept = self.handler(rose_verdict={"health": "healthy", "repaired": 0, "problems": []})\
+            ._check_imported_mods(self.imported, [], MagicMock())
+
+        self.assertIs(kept[0]["health"], ltk)
+
+    def test_ltk_manager_is_not_opened_for_a_skin_roses_checker_checked(self):
+        verdict = {"health": "repairable", "repaired": 5500, "problems": []}
+
+        kept = self.handler(rose_verdict=verdict)._check_imported_mods(self.skin_imported, [], MagicMock(), skins=True)
+
+        self.assertIs(kept[0]["health"], verdict)
+        self.library.check_mod.assert_not_called()
+
+    def test_a_skin_is_still_checked_by_ltk_manager_when_roses_checker_did_not_run(self):
+        ltk = {"health": "healthy", "repaired": 0, "problems": []}
+        self.library.check_mod.return_value = ltk
+
+        kept = self.handler(rose_verdict=None)._check_imported_mods(self.skin_imported, [], MagicMock(), skins=True)
+
+        self.assertIs(kept[0]["health"], ltk)
+
+    def test_a_skin_roses_checker_repaired_has_its_hashes_recorded_again(self):
+        self.library.check_mod.return_value = None
+        with patch.object(self.storage, "refresh_mod_hashes") as refresh:
+            self.handler(rose_verdict={"health": "repairable", "repaired": 2, "problems": []})\
+                ._check_imported_mods(self.skin_imported, [], MagicMock(), skins=True)
+
+        refresh.assert_any_call(Path(self.skin_imported[0]["path"]))
 
 
 class AddedAsPickedTests(ModCheckCase):
@@ -374,6 +434,7 @@ class BaseSkinFixOnImportTests(unittest.TestCase):
         self.addCleanup(library_class.stop)
         ltk.check_mod.return_value = check_result
         overlay = MagicMock()
+        overlay.check_mod.return_value = None  # Rose's own checker did not run
         overlay.game_dir = game_dir
         manager = SimpleNamespace(injector=SimpleNamespace(overlay_manager=overlay), _injection_in_progress=injecting)
         instance = object.__new__(message_handler.MessageHandler)

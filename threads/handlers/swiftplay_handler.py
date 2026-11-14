@@ -5,7 +5,6 @@ Swiftplay Handler
 Handles Swiftplay mode detection and injection
 """
 
-import logging
 import threading
 import time
 from typing import Optional
@@ -15,7 +14,7 @@ from lcu import LCU
 from lcu.core.lockfile import SWIFTPLAY_MODES, SWIFTPLAY_QUEUE_IDS
 from state import SharedState
 from utils.core.historic import clear_historic_entry, get_historic_skin_for_champion, write_historic_entry
-from utils.core.logging import get_logger, log_action
+from utils.core.logging import get_logger
 
 log = get_logger()
 
@@ -542,9 +541,6 @@ class SwiftplayHandler:
                 log.info(f"[phase] Will inject {total_skins} skin(s) from tracking dictionary")
 
                 from utils.core.utilities import is_base_skin
-                from pathlib import Path
-                import zipfile
-                import shutil
 
                 chroma_id_map = self.skin_scraper.cache.chroma_id_map if self.skin_scraper and self.skin_scraper.cache else None
 
@@ -668,4 +664,3 @@ class SwiftplayHandler:
                 log.warning(f"[phase] Error running Swiftplay overlay: {e}")
                 import traceback
                 log.debug(f"[phase] Traceback: {traceback.format_exc()}")
-

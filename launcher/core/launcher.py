@@ -51,6 +51,11 @@ MB_OK = 0x00000000
 MB_TOPMOST = 0x00040000
 IDYES = 6
 
+# This copy of Rose carries its own changes (the account switcher). Installing an official
+# release copies it over the install with robocopy /MIR, which deletes those changes, so
+# Rose doesn't check for or offer updates. New Rose versions come in through git instead.
+UPDATE_CHECK_ENABLED = False
+
 
 def _show_error(message: str) -> None:
     """Show error dialog to user"""
@@ -127,6 +132,9 @@ def _perform_update(dialog: UpdateDialog, dev_mode: bool = False) -> bool:
         dialog: UpdateDialog instance for UI updates
         dev_mode: If True, skip update check (for development)
     """
+    if not UPDATE_CHECK_ENABLED:
+        updater_log.info("Update check turned off (UPDATE_CHECK_ENABLED = False); continuing startup.")
+        return False
     updater_log.info("Starting update check sequence.")
     dialog.clear_transfer_text()
     dialog.set_detail("Checking for updates…")

@@ -52,12 +52,3 @@ class SessionData(TypedDict, total=False):
     timer: dict
     localPlayerCellId: int
     isSpectating: bool
-
-
-class LockfileData(TypedDict):
-    """Lockfile parsed data"""
-    name: str
-    pid: int
-    port: int
-    password: str
-    protocol: str

@@ -29,7 +29,8 @@ class RetryLoggingTests(unittest.TestCase):
             self.connection._wait_before_retry('LCU lockfile is not ready')
 
         self.assertEqual(self.log.warning.call_count, 1)
-        self.assertEqual(self.log.debug.call_count, 4)
+        # The repeats stay at trace level: the reason was already warned once (Nov 9, user's choice)
+        self.assertEqual(self.log.trace.call_count, 4)
 
     def test_a_new_reason_is_warned_again(self):
         self.connection._wait_before_retry('LCU lockfile is not ready')

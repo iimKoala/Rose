@@ -142,3 +142,9 @@ relay-worker/.wrangler/
 
 # Local test suites
 /test/
+
+# rose-mod-check build output (the .exe is copied to injection/tools)
+native/rose-mod-check/target/
+
+# Built from native/rose-mod-check; shipped in the tools download, not in git (a build carries the builder's folder names unless they are remapped)
+injection/tools/rose-mod-check.exe

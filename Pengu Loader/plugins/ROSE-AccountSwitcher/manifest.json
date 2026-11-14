@@ -1,0 +1,8 @@
+{
+  "name": "ROSE-AccountSwitcher",
+  "version": "1.0.0",
+  "description": "Account switching panel for Rose - quickly switch between saved League accounts",
+  "author": "Rose Team",
+  "main": "index.js",
+  "enabled": true
+}

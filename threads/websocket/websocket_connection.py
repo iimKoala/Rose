@@ -6,13 +6,11 @@ Handles WebSocket connection lifecycle and callbacks
 """
 
 import base64
-import json
 import logging
 import os
 import random
 import ssl
 import threading
-import time
 from typing import Optional, Callable
 
 import websocket  # websocket-client
@@ -149,7 +147,6 @@ class WebSocketConnection:
 
     def _on_open(self, ws):
         """WebSocket connection opened"""
-        from utils.core.logging import log_status
         
         separator = "=" * 80
         log.info(separator)
@@ -221,8 +218,8 @@ class WebSocketConnection:
         jitter = random.uniform(0.0, base_delay * WS_RECONNECT_JITTER)
         delay = min(WS_RECONNECT_MAX_DELAY, base_delay + jitter)
         # While the client is closed this repeats every few seconds for hours:
-        # warn when the reason changes, keep the repeats at debug level
-        log_retry = log.debug if reason == self._warned_retry_reason else log.warning
+        # warn when the reason changes, keep the repeats at trace level (shown only with --debug)
+        log_retry = log.trace if reason == self._warned_retry_reason else log.warning
         self._warned_retry_reason = reason
         log_retry(
             "[WS] %s; retrying in %.1fs (attempt %d)",

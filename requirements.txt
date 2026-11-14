@@ -2,6 +2,11 @@
 
 # App requirements
 # Security: All dependencies pinned to specific versions to prevent supply chain attacks
+keyring==25.7.0
+pywinauto==0.6.9
+comtypes==1.4.17
+pywin32==312
+six==1.17.0
 psutil==5.9.8
 requests==2.31.0
 # SOCKS support for requests: without it, a SOCKS system proxy fails every

@@ -1,0 +1,26 @@
+[package]
+name = "rose-mod-check"
+version = "0.2.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "LTK Manager's mod check and repair (ltk-manager-problems, v1.33.0) as a separate program for Rose"
+publish = false
+
+[dependencies]
+ltk-manager-problems = { git = "https://github.com/LeagueToolkit/ltk-manager", tag = "v1.33.0" }
+ltk-manager-base = { git = "https://github.com/LeagueToolkit/ltk-manager", tag = "v1.33.0" }
+ltk-manager-assets = { git = "https://github.com/LeagueToolkit/ltk-manager", tag = "v1.33.0" }
+serde_json = "1"
+# The repair's edit (LTK Manager's RepairEdit), at the versions LTK Manager v1.33.0 uses
+ltk_fantome = "0.18.2"
+ltk_hashtable = "0.2.2"
+ltk_wad = "0.5.10"
+ltk_mod_project = { version = "0.20.1", features = ["modpkg", "fantome"] }
+camino = "1.2"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+# Its own workspace, not part of anything around it
+[workspace]

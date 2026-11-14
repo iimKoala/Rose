@@ -6,6 +6,7 @@ Handles HTTP requests for previews, assets, and plugin files
 """
 
 import logging
+import sys
 from typing import Optional
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -245,9 +246,14 @@ class HTTPHandler:
             try:
                 from utils.core.paths import get_app_dir
                 app_dir = get_app_dir()
-                plugins_dir = app_dir.parent / "Pengu Loader" / "plugins"
-                if not plugins_dir.exists():
+                if getattr(sys, "frozen", False):
+                    plugins_dir = app_dir.parent / "Pengu Loader" / "plugins"
+                    if not plugins_dir.exists():
+                        plugins_dir = app_dir / "Pengu Loader" / "plugins"
+                else:
                     plugins_dir = app_dir / "Pengu Loader" / "plugins"
+                    if not plugins_dir.exists():
+                        plugins_dir = app_dir.parent / "Pengu Loader" / "plugins"
                 
                 if plugins_dir.exists():
                     file_path = plugins_dir / plugin_name / file_name

@@ -7,7 +7,6 @@ This subpackage contains system and OS-specific utilities:
 - admin_utils: Admin/elevation utilities
 - win32_base: Windows-specific utilities
 - window_utils: Window detection and monitoring
-- resolution_utils: Resolution handling
 """
 
 from utils.system.admin_utils import (
@@ -22,4 +21,3 @@ __all__ = [
     'is_registered_for_autostart', 'register_autostart', 'unregister_autostart',
     'show_message_box_threaded',
 ]
-

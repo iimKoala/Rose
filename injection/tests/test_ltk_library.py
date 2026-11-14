@@ -473,6 +473,19 @@ class ModCheckTests(LtfSessionTestCase):
         self.assertEqual(self.recorded, [])
         self.assertEqual(self.bridge.library_entries, [])
 
+    def test_a_bridge_without_the_check_command_is_not_started_for_another_check(self):
+        self.addCleanup(setattr, LtkLibrary, "check_missing", False)
+        unknown = BridgeCommandError("check_mod_health failed: unknown: check_mod_health")
+        with patch.object(FakeBridge, "check_mod_health", side_effect=unknown):
+            self.assertIsNone(self.check())
+        started = len(FakeBridge.created)
+        self.assertGreater(started, 0)
+
+        self.assertIsNone(self.check())
+
+        self.assertEqual(len(FakeBridge.created), started)
+        self.assertEqual(self.stored.read_bytes(), self.before)
+
     def test_nothing_is_checked_while_a_game_uses_ltk_manager(self):
         self.process_manager.set_session_stopper(lambda: None)
 

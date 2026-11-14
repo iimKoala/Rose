@@ -1766,6 +1766,61 @@ class PatcherStatusParsingTests(LtfSessionTestCase):
         self.assertIn("WAD Mount Failure (CorruptArchive", reason)
         self.assertIn("incidents\\2026-11-05T10-04-52.json", reason)
 
+    def _missing_data_incident(self):
+        session = self._session()
+        FakeBridge.patcher_statuses = [status(session={"log": (
+            "2026-11-10T08:09:41.000000Z  INFO ltk_manager_core::patching::pipeline: Incident recorded: "
+            "Missing Game Data id=2026-11-10T03-09-34 verdict=MissingData")})]
+        return session
+
+    def test_a_game_a_mod_crashed_names_the_mods_instead_of_a_failed_injection(self):
+        """Nov 10: Talon Mahoraga (28 fatal problems) crashed the game; the injection had worked"""
+        incidents = self.root / "incidents"
+        incidents.mkdir()
+        (incidents / "2026-11-10T03-09-34.json").write_text(json.dumps({"suspects": [
+            {"displayName": "talon mahoraga"}, {"displayName": "The Administrator Announcer"}]}), encoding="utf-8")
+        session = self._missing_data_incident()
+
+        with patch.object(overlay_manager, "LTK_INCIDENTS_DIR", str(incidents)):
+            self.overlay._poll_patcher_status(session)
+
+        self.assertNotIn("LTF_FAILED", self.reported_codes())
+        (message,) = [call.args[2] for call in self.report_issue.call_args_list if call.args[0] == "MOD_CRASHED_GAME"]
+        self.assertIn("crashed while loading a mod", message)
+        self.assertIn("talon mahoraga, The Administrator Announcer", message)
+
+    def test_a_mods_name_cannot_add_a_line_to_troubleshooting(self):
+        """A mod's name is its author's text: a newline in it would write a fake diagnostics entry"""
+        incidents = self.root / "incidents"
+        incidents.mkdir()
+        name = "talon\r\nNov 10 03:09 | Fake\x85entry\u2028\u2029\x07" + "x" * 200
+        (incidents / "2026-11-10T03-09-34.json").write_text(json.dumps({"suspects": [{"displayName": name}]}),
+                                                             encoding="utf-8")
+        session = self._missing_data_incident()
+
+        with patch.object(overlay_manager, "LTK_INCIDENTS_DIR", str(incidents)):
+            self.overlay._poll_patcher_status(session)
+
+        (message,) = [call.args[2] for call in self.report_issue.call_args_list if call.args[0] == "MOD_CRASHED_GAME"]
+        self.assertEqual(len(message.splitlines()), 1)  # how Rose reads the diagnostics file back
+        self.assertIn("talon Nov 10 03:09 | Fake entry", message)
+        self.assertLess(len(message), 200)
+
+    def test_an_incident_id_that_is_a_path_is_never_opened(self):
+        """An id that is a network path would make Windows send the user's login hash to that server"""
+        for bad in ("\\\\server\\share\\x", "../../secrets", "C:\\Windows\\x", "a b"):
+            with patch.object(overlay_manager.Path, "read_text", side_effect=AssertionError("opened " + bad)):
+                self.assertEqual(overlay_manager._incident_mods(bad), "")
+
+    def test_a_missing_data_incident_without_its_file_is_reported_as_before(self):
+        session = self._missing_data_incident()
+
+        with patch.object(overlay_manager, "LTK_INCIDENTS_DIR", str(self.root / "no-incidents-here")):
+            self.overlay._poll_patcher_status(session)
+
+        self.assertNotIn("MOD_CRASHED_GAME", self.reported_codes())
+        self.assertIn("LTF_FAILED", self.reported_codes())
+
 
     def test_a_start_while_the_last_patcher_still_builds_waits_for_it(self):
         """#437: LTK Manager stops a patcher only after the overlay build it is
@@ -2621,6 +2676,148 @@ class SessionStopperWiringTests(LtfSessionTestCase):
 
         self.assertIsNone(self.process_manager._session_stopper)
 
+
+class ModCheckTests(LtfSessionTestCase):
+    """LTK Manager's rules check a mod the user adds and repair what they can, without LTK Manager (rose-mod-check.exe)"""
+
+    SKINHACK = {
+        "rule": "bin/skinhack", "title": "Another skin's model",
+        "description": "This base skin uses the mesh of another skin.",
+        "severity": "error", "count": 1, "fixable": 0,
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.folder = self.mods / self.make_mod()
+        self.checked = []  # (name of the archive checked, whether it was a file then, game folder)
+        self.verdict = {"health": "healthy", "fixable": 0, "counts": {}, "rules": []}
+
+        def check_mod_file(archive, game_dir=None):
+            self.checked.append((Path(archive).name, Path(archive).is_file(), game_dir))
+            return self.verdict
+
+        checker = patch.object(overlay_manager.mod_checker, "check_mod_file", side_effect=check_mod_file)
+        checker.start()
+        self.addCleanup(checker.stop)
+
+        self.repairs = []  # name of each archive repaired
+        self.after_repair = None  # the verdict a repair answers with
+
+        def repair_mod_file(archive, game_dir=None):
+            self.repairs.append(Path(archive).name)
+            return self.after_repair
+
+        repairer = patch.object(overlay_manager.mod_checker, "repair_mod_file", side_effect=repair_mod_file)
+        repairer.start()
+        self.addCleanup(repairer.stop)
+
+    TYPE_MISMATCHES = {"rule": "bin/property-type", "title": "Meta property type mismatch",
+                       "description": "", "severity": "fatal", "count": 28, "fixable": 28}
+
+    def test_a_healthy_mod_is_left_as_it_is_and_ltk_manager_never_starts(self):
+        result = self.overlay.check_mod(self.folder, "Eternal Aspect Leona")
+
+        self.assertEqual(result, {"health": "healthy", "repaired": 0, "fixable": 0, "problems": []})
+        self.assertEqual((self.folder / "WAD" / "Aatrox.wad.client").read_bytes(), b"wad")
+        self.assertEqual(FakeBridge.created, [])
+
+    def test_a_folder_mod_is_packed_for_the_check_and_the_copy_removed(self):
+        self.overlay.check_mod(self.folder, "Eternal Aspect Leona")
+
+        self.assertEqual(self.checked, [(f"{self.folder.name}.fantome", True, self.overlay.game_dir)])
+        self.assertEqual(list(self.overlay.host.staging_root().glob("check-*")), [])
+
+    def test_a_stored_archive_is_checked_where_it_is(self):
+        """A .modpkg keeps its name, so the checker reads it as a modpkg"""
+        stored = self.root / "mods" / "skins" / "89000" / "Leona.modpkg"
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(b"package")
+
+        with patch.object(overlay_manager, "write_fantome_zip", side_effect=AssertionError("packed again")):
+            self.overlay.check_mod(stored, "Eternal Aspect Leona")
+
+        self.assertEqual(self.checked, [("Leona.modpkg", True, self.overlay.game_dir)])
+        self.assertEqual(stored.read_bytes(), b"package")
+
+    def test_a_mod_the_game_will_reject_is_reported(self):
+        """#440, #454: LTK Manager turns off a skin that uses another skin's model"""
+        self.verdict = {"health": "unrepairable", "fixable": 0, "counts": {"errors": 1},
+                        "rules": [self.SKINHACK, dict(self.SKINHACK, rule="x/warning", severity="warning")]}
+
+        result = self.overlay.check_mod(self.folder, "Eternal Aspect Leona")
+
+        self.assertEqual(result["problems"], [{"rule": "bin/skinhack", "title": "Another skin's model",
+                                               "description": "This base skin uses the mesh of another skin."}])
+
+    def test_a_repairable_stored_archive_is_repaired(self):
+        """Nov 9, Talon Mahoraga: 28 fatal type mismatches, all repaired, healthy after"""
+        stored = self.root / "mods" / "skins" / "91000" / "Talon Mahoraga.fantome"
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(b"PK")
+        self.verdict = {"health": "repairable", "fixable": 28, "counts": {"fatals": 28}, "rules": [self.TYPE_MISMATCHES]}
+        self.after_repair = {"health": "healthy", "fixable": 0, "counts": {}, "rules": [], "repaired": 28}
+
+        result = self.overlay.check_mod(stored, "Talon Mahoraga")
+
+        self.assertEqual(result, {"health": "repairable", "repaired": 28, "fixable": 0, "problems": []})
+        self.assertEqual(self.repairs, ["Talon Mahoraga.fantome"])
+
+    def test_a_healthy_archive_with_a_small_fixable_problem_is_repaired(self):
+        """Nov 13, The Forgotten Jayce: healthy, with 1 info-level problem (a sound bank without an id).
+        The store showed Fix, and Fix repaired nothing because the mod was not 'repairable'"""
+        stored = self.root / "mods" / "skins" / "126000" / "The Forgotten Jayce.fantome"
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(b"PK")
+        bank = {"rule": "audio/bank-id", "title": "Unset soundbank id", "description": "The audio bank has no id",
+                "severity": "info", "count": 1, "fixable": 1}
+        self.verdict = {"health": "healthy", "fixable": 1, "counts": {"infos": 1}, "rules": [bank]}
+        self.after_repair = {"health": "healthy", "fixable": 0, "counts": {}, "rules": [], "repaired": 1}
+
+        result = self.overlay.check_mod(stored, "The Forgotten Jayce")
+
+        self.assertEqual(result, {"health": "healthy", "repaired": 1, "fixable": 0, "problems": []})
+        self.assertEqual(self.repairs, ["The Forgotten Jayce.fantome"])
+
+    def test_a_check_without_repair_only_counts_what_could_be_repaired(self):
+        """The Mod store's Installed list: says the mod needs a repair, and repairs nothing"""
+        stored = self.root / "mods" / "skins" / "91000" / "Talon Mahoraga.fantome"
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(b"PK")
+        self.verdict = {"health": "repairable", "fixable": 28, "counts": {"fatals": 28}, "rules": [self.TYPE_MISMATCHES]}
+
+        result = self.overlay.check_mod(stored, "Talon Mahoraga", repair=False)
+
+        self.assertEqual(result, {"health": "repairable", "repaired": 0, "fixable": 28, "problems": []})
+        self.assertEqual(self.repairs, [])
+
+    def test_a_repair_that_could_not_run_keeps_the_mod(self):
+        stored = self.root / "mods" / "skins" / "91000" / "Talon Mahoraga.fantome"
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(b"PK")
+        self.verdict = {"health": "repairable", "fixable": 28, "counts": {"fatals": 28}, "rules": [self.TYPE_MISMATCHES]}
+
+        result = self.overlay.check_mod(stored, "Talon Mahoraga")
+
+        self.assertEqual(result, {"health": "repairable", "repaired": 0, "fixable": 28, "problems": []})
+
+    def test_a_folder_mod_is_checked_but_not_repaired(self):
+        self.verdict = {"health": "repairable", "fixable": 28, "counts": {"fatals": 28}, "rules": [self.TYPE_MISMATCHES]}
+
+        result = self.overlay.check_mod(self.folder, "Eternal Aspect Leona")
+
+        self.assertEqual(result, {"health": "repairable", "repaired": 0, "fixable": 28, "problems": []})
+        self.assertEqual(self.repairs, [])
+
+    def test_a_healthy_mod_is_not_repaired(self):
+        self.overlay.check_mod(self.folder, "Eternal Aspect Leona")
+
+        self.assertEqual(self.repairs, [])
+
+    def test_no_verdict_means_no_check(self):
+        self.verdict = None
+
+        self.assertIsNone(self.overlay.check_mod(self.folder, "Eternal Aspect Leona"))
+        self.assertEqual(FakeBridge.created, [])
 
 if __name__ == "__main__":
     unittest.main()

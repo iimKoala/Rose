@@ -17,6 +17,7 @@ from utils.core.logging import get_logger, log_section, log_success
 from .lockfile import find_lockfile, parse_lockfile, find_process_credentials
 
 log = get_logger()
+_announced_port = None  # one "LCU Connected" banner per League start, however many LCU objects connect or refresh
 
 
 class LCUConnection:
@@ -50,9 +51,10 @@ class LCUConnection:
             "https": None,
         })  # explicit None keeps Requests from re-reading env vars later
         return session
-    
+
     def _init_from_lockfile(self, force: bool = False):
         """Initialize from lockfile or a running regional client's arguments."""
+        global _announced_port
         previous_path = self.lf_path
         lf = find_lockfile(self._explicit_lockfile)
         self.lf_path = lf
@@ -102,7 +104,9 @@ class LCUConnection:
             self.session.auth = ("riot", self.pw)
             self.session.headers.update({"Content-Type": "application/json"})
             self.ok = True
-            log_section(log, "LCU Connected", "", {"Port": self.port, "Status": "Ready", "Source": source})
+            if self.port != _announced_port:
+                _announced_port = self.port
+                log_section(log, "LCU Connected", "", {"Port": self.port, "Status": "Ready", "Source": source})
             self._check_client_elevation(lockfile_data.pid)
         except Exception as e:
             self._disable(f"LCU unavailable: {e}")

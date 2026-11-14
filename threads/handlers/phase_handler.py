@@ -5,7 +5,6 @@ Phase Handler
 Handles phase-specific logic and UI management
 """
 
-import logging
 from lcu import LCU
 from lcu.core.lockfile import SWIFTPLAY_QUEUE_IDS
 from state import SharedState
@@ -146,6 +145,11 @@ class PhaseHandler:
         
         elif phase == "InProgress":
             self._handle_in_progress()
+            try:  # the in-game strip and gold board; their program ends by itself when the game has gone
+                from main.game_build import start_overlay
+                start_overlay(self.lcu)
+            except Exception as e:
+                log.warning(f"[phase] Could not start the in-game build guide: {e}")
         
         elif phase == "EndOfGame":
             self._handle_end_of_game()
@@ -257,4 +261,3 @@ class PhaseHandler:
         # via cleanup_swiftplay_exit() which also handles the associated
         # tracking/mods state atomically.  Clearing the flag alone would
         # leave orphaned swiftplay_extracted_mods / swiftplay_skin_tracking.
-

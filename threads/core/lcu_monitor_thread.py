@@ -47,6 +47,8 @@ class LCUMonitorThread(threading.Thread):
         self.last_language_check = 0.0  # Timestamp of last language check
         self.language_retry_count = 0  # Track consecutive language detection failures
         self.max_language_retries = 5  # Force reconnect after this many failures
+        self.last_account_check = 0.0  # Timestamp of last account rank check
+        self.last_others_check = 0.0  # Timestamp of the last rank lookup for the other saved accounts
 
     def run(self):
         """Main monitoring loop"""
@@ -127,6 +129,8 @@ class LCUMonitorThread(threading.Thread):
                     now = time.time()
                     if now - self.last_language_check >= 30.0 and getattr(self.state, "phase", None) != "InProgress":
                         self._check_language_change()
+                    if now - self.last_account_check >= 60.0:
+                        self._check_account_rank()
 
                 # WebSocket disconnected
                 elif not current_ws_connected and self.ws_connected:
@@ -158,6 +162,8 @@ class LCUMonitorThread(threading.Thread):
             log.info("[LCU] Detecting client language...")
             new_language = self.lcu.client_language
             if new_language:
+                self._check_account_rank()
+
                 if new_language != self.last_language:
                     log.info(f"[LCU] Language detected: {new_language}")
                 else:
@@ -210,6 +216,59 @@ class LCUMonitorThread(threading.Thread):
         except Exception as e:
             log.debug(f"[LCU] Error checking language change: {e}")
     
+    def _check_account_rank(self) -> None:
+        """Periodically check and update rank for the current account."""
+        self.last_account_check = time.time()
+        try:
+            from main.account_rank import read_current_account
+            account_info = read_current_account(self.lcu)
+            if account_info:
+                from main.account_manager import get_account_manager
+                mgr = get_account_manager()
+                # Match the signed-in login to a saved account; fill in its Riot ID and rank
+                saved = mgr.find_by_username(account_info["username"])
+                if saved:
+                    riot_id = account_info["riot_id"]
+                    mgr.update_from_client(
+                        saved.id,
+                        riot_id,
+                        tier=account_info["tier"],
+                        division=account_info["division"],
+                        lp=account_info["lp"],
+                        level=account_info["level"],
+                        last_season=account_info["last_season"],
+                    )
+                    mgr.set_active_account(saved.id)
+                    log.info(f"[LCU] Updated Riot ID and rank for {riot_id}")
+                    self._refresh_other_ranks(mgr, saved)
+                else:
+                    log.debug("[LCU] Signed-in login is not a saved account")
+        except Exception as e:
+            log.debug(f"[LCU] Account rank check error: {e}")
+
+    def _refresh_other_ranks(self, mgr, signed_in) -> None:
+        """Every 30 minutes, look up the other saved accounts' ranks through the signed-in client.
+
+        Their cards used to wait for each account's own sign-in (Nov 13: "gold what? 2? 3?"). Only accounts
+        of the signed-in account's region are looked up, and a rank Rose knows is never replaced by
+        "unranked": that is what the client answers for a player of another server. Not during a game.
+        """
+        if time.time() - self.last_others_check < 1800.0 or getattr(self.state, "phase", None) == "InProgress":
+            return
+        self.last_others_check = time.time()
+        from main.account_rank import read_other_account
+        updated = 0
+        for account in mgr.get_all_accounts():
+            if account.id == signed_in.id or not account.riot_id or account.region != signed_in.region:
+                continue
+            rank = read_other_account(self.lcu, account.riot_id)
+            if not rank or (account.tier and not rank["tier"]):
+                continue
+            mgr.update_from_client(account.id, account.riot_id, tier=rank["tier"], division=rank["division"],
+                                   lp=rank["lp"], level=rank["level"] or account.level, last_season=rank["last_season"])
+            updated += 1
+        log.info(f"[LCU] Looked up the rank of {updated} other saved account(s)")
+
     def _check_initial_champion_state(self):
         """Check if we're already in ChampSelect with a locked champion (Issue #29)
         

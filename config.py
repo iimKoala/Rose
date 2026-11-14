@@ -10,7 +10,7 @@ import shutil
 import sys
 import threading
 import logging
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import Optional
 from pathlib import Path
 import configparser
 
@@ -207,7 +207,6 @@ WS_RECONNECT_JITTER = 0.25     # Randomized delay fraction to avoid synchronized
 # This prevents premature timer start in game modes where all champions lock before bans complete
 WS_PROBE_ITERATIONS = 8        # Number of LCU timer probe attempts
 WS_PROBE_SLEEP_MS = 60         # Milliseconds between probe attempts (0.06s)
-WS_PROBE_WINDOW_MS = 480       # Total probe window (8 * 60ms ~= 480ms)
 
 
 # =============================================================================
@@ -240,6 +239,8 @@ def clamp_injection_threshold(value) -> float:
     if seconds != seconds:  # NaN
         return INJECTION_THRESHOLD_DEFAULT_S
     return max(INJECTION_THRESHOLD_MIN_S, min(INJECTION_THRESHOLD_MAX_S, seconds))
+
+
 BASE_SKIN_VERIFICATION_WAIT_S = 0.15        # Seconds to wait for LCU to process base skin change
 
 
@@ -301,7 +302,6 @@ CHROMA_PANEL_PROCESSING_THRESHOLD_S = 1.0  # Warning threshold for chroma panel 
 LCU_API_TIMEOUT_S = 2.0                 # Timeout for LCU API requests
 LCU_GET_CACHE_TTL_S = 0.2               # TTL for LCU GET response cache (de-dupes rapid polls across threads)
 LCU_SKIN_SCRAPER_TIMEOUT_S = 3.0        # Timeout for LCU skin scraper requests
-CHROMA_DOWNLOAD_TIMEOUT_S = 10          # Timeout for chroma preview downloads
 DEFAULT_SKIN_DOWNLOAD_TIMEOUT_S = 30    # Timeout for skin downloads
 SKIN_DOWNLOAD_STREAM_TIMEOUT_S = 60     # Timeout for streaming skin downloads
 
@@ -313,7 +313,6 @@ SKIN_DOWNLOAD_STREAM_TIMEOUT_S = 60     # Timeout for streaming skin downloads
 TRAY_INIT_SLEEP_S = 0.2                 # Sleep after tray icon initialization
 PROCESS_MONITOR_SLEEP_S = 0.5           # Sleep during process monitoring loop
 WINDOW_CHECK_SLEEP_S = 1                # Sleep between window existence checks
-API_POLITENESS_DELAY_S = 0.5            # Delay between API calls to be polite
 CONSOLE_BUFFER_CLEAR_INTERVAL_S = 0.5   # Interval to clear console buffer on Windows
 
 # =============================================================================
@@ -335,20 +334,10 @@ TRAY_ICON_BORDER_WIDTH = 4              # Border width for icon ellipse
 TRAY_ICON_FONT_SIZE = 40                # Font size for "SC" text on icon
 TRAY_ICON_TEXT_X = 36                   # X position for text
 TRAY_ICON_TEXT_Y = 44                   # Y position for text
-TRAY_ICON_DOT_SIZE = 70                 # Size of status indicator dot
 
 # =============================================================================
 # WINDOWS API CONSTANTS
 # =============================================================================
-
-# Process access rights
-WINDOWS_PROCESS_QUERY = 0x1000          # PROCESS_QUERY_LIMITED_INFORMATION
-
-# Window display commands
-WINDOWS_SW_HIDE = 0                      # Hide window command
-
-# MessageBox flags
-WINDOWS_MB_ICONERROR = 0x10              # Error icon for message box
 
 # DPI Awareness
 WINDOWS_DPI_AWARENESS_SYSTEM = 1         # PROCESS_SYSTEM_DPI_AWARE

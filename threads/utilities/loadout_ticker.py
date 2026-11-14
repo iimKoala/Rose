@@ -249,9 +249,6 @@ class LoadoutTicker(threading.Thread):
 
             if remain_ms <= thresh and not self.state.last_hover_written:
                 try:
-                    # Build skin label
-                    final_label = self.skin_name_resolver.build_skin_label()
-                
                     # Get champion name for injection
                     cname = self._champion_name()
                 

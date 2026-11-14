@@ -5,7 +5,6 @@ Timer Manager
 Manages loadout countdown timer lifecycle
 """
 
-import logging
 import time
 from typing import Optional
 
@@ -54,7 +53,6 @@ class TimerManager:
         phase_timer = str((t.get("phase") or "")).upper()
         left_ms = int(t.get("adjustedTimeLeftInPhase") or 0)
         should_start = False
-        probe_used = False
         
         # ONLY start timer on FINALIZATION phase
         if phase_timer == "FINALIZATION":
@@ -73,7 +71,6 @@ class TimerManager:
                     phase_timer_probe = str((t2.get("phase") or "")).upper()
                     left_ms = int(t2.get("adjustedTimeLeftInPhase") or 0)
                     if phase_timer_probe == "FINALIZATION" and left_ms > 0:
-                        probe_used = True
                         break
                     time.sleep(WS_PROBE_SLEEP_MS / 1000.0)
             
@@ -109,4 +106,3 @@ class TimerManager:
                             skin_scraper=self.skin_scraper
                         )
                         self.ticker.start()
-

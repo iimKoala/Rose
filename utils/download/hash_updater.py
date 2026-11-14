@@ -139,8 +139,6 @@ def download_file(url: str, session: requests.Session, status_callback: Optional
         if etags is not None and response.headers.get('ETag'):
             etags[filename] = response.headers['ETag']
 
-        # Get total size if available
-        total_size = int(response.headers.get('content-length', 0))
         downloaded = 0
         chunks = []
         
@@ -330,4 +328,3 @@ def update_hash_files(status_callback: Optional[Callable[[str], None]] = None, d
         status_callback("Game hashes updated successfully")
     
     return True
-

@@ -31,6 +31,7 @@ class LCUAPI:
         self.connection = connection
         self._cache: dict[str, tuple[float, Any]] = {}
         self._cache_lock = threading.Lock()
+        self._failing_gets: set[str] = set()  # paths whose GET failed and was said once, until League answers again
 
     def _cache_get(self, path: str, now: float) -> Any:
         with self._cache_lock:
@@ -102,6 +103,7 @@ class LCUAPI:
                 return None
 
         def _store(value):
+            self._failing_gets.discard(path)  # League answered: a new failure is said again
             if use_cache:
                 self._cache_put(path, value, ttl)
             return value
@@ -130,7 +132,10 @@ class LCUAPI:
                 except Exception:
                     return _store(None)
             except requests.exceptions.RequestException as e:
-                log.debug(f"[LCU] GET {path} failed after reconnecting: {e}")
+                # Repeats while League starts or closes: said once per path (debug), then trace until it answers again
+                log_failure = log.trace if path in self._failing_gets else log.debug
+                self._failing_gets.add(path)
+                log_failure(f"[LCU] GET {path} failed after reconnecting: {e}")
                 return None
     
     def put(self, path: str, json_data, timeout: float, headers: Optional[dict] = None) -> Optional[requests.Response]:

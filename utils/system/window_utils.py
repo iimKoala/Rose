@@ -231,7 +231,6 @@ if is_windows():
             return rects[0]
         return None
 
-
     def is_league_window_focused() -> bool:
         """
         Check if League window currently has focus (is the foreground window)
@@ -280,36 +279,6 @@ else:
         return False
 
 
-def get_league_window_client_size(hint: str = "League") -> Optional[Tuple[int, int]]:
-    """
-    Get League of Legends window client area size (width, height)
-    Returns the actual client area dimensions for ROI calculations
-    
-    Args:
-        hint: Window title hint for searching
-        
-    Returns:
-        Tuple of (width, height) or None if window not found
-    """
-    rect = find_league_window_rect(hint)
-    if rect:
-        left, top, right, bottom = rect
-        width = right - left
-        height = bottom - top
-        return (width, height)
-    return None
-
-
-def get_window_size() -> Optional[Tuple[int, int]]:
-    """
-    Alias for get_league_window_client_size for backward compatibility
-    
-    Returns:
-        Tuple[int, int]: (width, height) or None if window is not found
-    """
-    return get_league_window_client_size()
-
-
 def monitor_league_window():
     """
     Monitor League of Legends window size every second
@@ -340,35 +309,6 @@ def monitor_league_window():
             
     except KeyboardInterrupt:
         print("\nMonitoring stopped.")
-
-
-def calculate_roi_from_proportions(window_rect: Tuple[int, int, int, int], 
-                                 proportions: dict) -> Optional[Tuple[int, int, int, int]]:
-    """
-    Calculate ROI coordinates from window rectangle and proportions
-    
-    Args:
-        window_rect: (left, top, right, bottom) window coordinates
-        proportions: Dict with 'x1_ratio', 'y1_ratio', 'x2_ratio', 'y2_ratio'
-        
-    Returns:
-        Tuple of ROI coordinates (left, top, right, bottom) or None if invalid
-    """
-    if not window_rect or not proportions:
-        return None
-    
-    left, top, right, bottom = window_rect
-    width = right - left
-    height = bottom - top
-    
-    roi_abs = (
-        int(left + width * proportions.get('x1_ratio', 0)),
-        int(top + height * proportions.get('y1_ratio', 0)),
-        int(left + width * proportions.get('x2_ratio', 1)),
-        int(top + height * proportions.get('y2_ratio', 1))
-    )
-    
-    return roi_abs
 
 
 def main():
