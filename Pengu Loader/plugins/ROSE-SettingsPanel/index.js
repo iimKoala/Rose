@@ -2094,6 +2094,23 @@
     document.querySelectorAll(".rose-language-menu").forEach((menu) => menu.remove());
   }
 
+  // The (i) icon whose tooltip is shown. One listener pair for every panel
+  // opened: the flyout is rebuilt on each open and its icons go with it.
+  let _tooltipOwner = null;
+  function repositionSettingsTooltip() {
+    if (!_tooltipOwner) return;
+    const tt = document.getElementById("rose-global-tooltip");
+    if (!tt || tt.getAttribute("data-show") !== "true") return;
+    if (!_tooltipOwner.btn.isConnected) {
+      _tooltipOwner = null;
+      return;
+    }
+    _tooltipOwner.reposition();
+  }
+  // Keep tooltip in correct position while resizing/scrolling
+  window.addEventListener("resize", repositionSettingsTooltip);
+  window.addEventListener("scroll", repositionSettingsTooltip, true);
+
   function createSettingsFlyout(navItem) {
     closeLanguageMenu();
     // Remove existing panel if any
@@ -2221,6 +2238,7 @@
     }
 
     function hideGlobalTooltip() {
+      _tooltipOwner = null;
       const el = document.getElementById("rose-global-tooltip");
       if (!el) return;
       el.setAttribute("data-show", "false");
@@ -2272,22 +2290,17 @@
         e.stopPropagation();
       });
 
-      const show = () => showGlobalTooltipFor(btn, tooltipText);
+      const reposition = () => showGlobalTooltipFor(btn, tooltipText);
+      const show = () => {
+        _tooltipOwner = { btn, reposition };
+        reposition();
+      };
       const hide = () => hideGlobalTooltip();
 
       btn.addEventListener("mouseenter", show);
       btn.addEventListener("mouseleave", hide);
       btn.addEventListener("focus", show);
       btn.addEventListener("blur", hide);
-
-      // Keep tooltip in correct position while resizing/scrolling
-      const reposition = () => {
-        const tt = document.getElementById("rose-global-tooltip");
-        if (!tt || tt.getAttribute("data-show") !== "true") return;
-        showGlobalTooltipFor(btn, tooltipText);
-      };
-      window.addEventListener("resize", reposition);
-      window.addEventListener("scroll", reposition, true);
 
       wrapper.appendChild(btn);
       return wrapper;
@@ -5131,6 +5144,12 @@
         ? t("LTK Manager found problems it can't repair in {name}, so it won't be playable. {reason}", { name, reason }).trim()
         : t("LTK Manager found problems it can't repair in this mod, so it won't be playable. {reason}", { reason }).trim();
     }
+    if (item.code === "ltk_cleanup_failed") {
+      // Not "Failed to import": the mod was added, and stays
+      return several
+        ? t("LTK Manager rejected {name}, but Rose could not remove it. It is still in your library.", { name })
+        : t("LTK Manager rejected this mod, but Rose could not remove it. It is still in your library.");
+    }
     return t("Failed to import {name}: {error}", { name, error: item.error || "" });
   }
 
@@ -5721,11 +5740,14 @@
     const recS = typeof recMs === "number" ? (recMs / 1000).toFixed(2) : null;
     const curThresholdVal = typeof currentSettings?.threshold === "number" ? currentSettings.threshold : null;
     const needsIncrease = recS !== null && curThresholdVal !== null && curThresholdVal < parseFloat(recS) - 0.001;
+    // A lower value only when Rose has enough games to back it (base_skin_tracker.py)
+    const canDecrease = recS !== null && curThresholdVal !== null && stats.can_recommend_lower === true &&
+      curThresholdVal > parseFloat(recS) + 0.001;
     const games = stats.confirmed_count;
     const label = games > 1 ? t("{count} games", { count: games }) : t("{count} game", { count: games });
 
     let html;
-    if (needsIncrease) {
+    if (needsIncrease || canDecrease) {
       const recommended = `<span style="color:#c89b3c; font-weight:700;">${recS}s</span>`;
       html = `<span style="color:#c8aa6e;">${escapeHtml(t("Based on {games}, we recommend {value}", { games: label })).replace("{value}", recommended)}</span>`;
       html += ` <button id="rose-apply-recommended-btn" style="

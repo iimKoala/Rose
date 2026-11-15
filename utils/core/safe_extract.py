@@ -6,9 +6,10 @@ Provides secure extraction of ZIP files with path traversal protection
 """
 
 import io
+import os
 import zipfile
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 from utils.core.logging import get_logger
 from utils.core.modpkg import MODPKG_SUFFIX, extract_modpkg
@@ -57,6 +58,15 @@ def _validate_members(zf: zipfile.ZipFile, dest_resolved: Path) -> None:
             raise UnsafePathError(
                 f"Attempted path traversal detected: '{member.filename}' would extract outside target directory"
             )
+
+
+def join_within(resolved_base: Path, relative_path: str) -> Optional[Path]:
+    """Join *relative_path* to an already resolved base, or return None if it escapes the base.
+
+    Purely lexical (no filesystem calls), for bulk extraction where resolving every entry is costly.
+    """
+    candidate = Path(os.path.normpath(resolved_base / relative_path))
+    return candidate if candidate.is_relative_to(resolved_base) else None
 
 
 def is_safe_path(base_dir: Path, target_path: Path) -> bool:

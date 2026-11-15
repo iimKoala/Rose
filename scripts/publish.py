@@ -4,7 +4,8 @@
 
 What goes out is ONE new commit holding the files of the local HEAD, on top of what was published before
 (the first time: on top of the original project's history). The local history, with its old file versions
-and its commit messages, never leaves this PC.
+and its commit messages, never leaves this PC. After a merge of the original, that one commit also names
+the original's newest commit as a parent: the original's commits are public already.
 
 Before anything is sent, every file of that commit and its message are searched for this PC's private
 values (the Windows user name, the computer's name, email addresses of the local commits, and the names,
@@ -139,9 +140,20 @@ def head_files():
             yield path, git("cat-file", "blob", meta.split()[2])
 
 
-def ref(name: str) -> str:
-    done = subprocess.run(["git", "rev-parse", "--verify", "--quiet", name], capture_output=True, cwd=ROOT)
+def ref(name: str, cwd=ROOT) -> str:
+    done = subprocess.run(["git", "rev-parse", "--verify", "--quiet", name], capture_output=True, cwd=cwd)
     return done.stdout.decode().strip() if done.returncode == 0 else ""
+
+
+def public_parents(parent: str, cwd=ROOT) -> list:
+    """The parents of the public commit: what was published before and, when HEAD holds a merge of the
+    original that is not published yet, the original's newest commit too. Those commits are public already
+    (they are the original's), and without them GitHub keeps counting this branch as behind the original."""
+    def within(older: str, newer: str) -> bool:
+        return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], capture_output=True, cwd=cwd).returncode == 0
+
+    original = ref("refs/remotes/origin/main", cwd)
+    return [parent, original] if original and within(original, "HEAD") and not within(original, parent) else [parent]
 
 
 def public_message(given: str) -> str:
@@ -178,7 +190,8 @@ def main(argv=None) -> int:
     if ref(PUBLISHED) and git("rev-parse", parent + "^{tree}").decode().strip() == tree:
         commit = parent  # these files were made into a public commit already: only send it (again)
     else:
-        commit = git("commit-tree", tree, "-p", parent, "-m", message).decode().strip()
+        parents = [arg for one in public_parents(parent) for arg in ("-p", one)]
+        commit = git("commit-tree", tree, *parents, "-m", message).decode().strip()
         git("update-ref", PUBLISHED, commit)
         git("update-ref", PUBLISHED_FROM, "HEAD")
     pushed = subprocess.run(["git", "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", "push",

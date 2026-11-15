@@ -43,6 +43,9 @@ developer's PC does.
 - **One commit, not the history.** It makes one new commit holding the files of the local HEAD, on top of
   what was published before (the first time: on top of the original project's history), and pushes only
   that. The local history, with every old version of every file and every commit message, stays local.
+  After a merge of the original, that one commit also names the original's newest commit as a parent
+  (`public_parents`): those commits are the original's and public already, and without them GitHub keeps
+  counting the `release` branch as behind the original.
 - **A check before every publish.** Every file of that commit and its message are searched for the PC's
   private values: the Windows user name, the computer's name, the email addresses of the local commits, the
   names, logins, tags and notes of the accounts saved in the account switcher, and the lines of

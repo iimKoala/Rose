@@ -5,6 +5,7 @@ No network: the room is a stand-in that hands one member's messages to the other
 
 import asyncio
 import hashlib
+import json
 import os
 import tempfile
 import time
@@ -20,7 +21,9 @@ from party.core.party_state import PartyState
 from party.discovery import custom_mods, received_mods
 from party.network import mod_transfer
 from party.network.mod_transfer import MAGIC, ModTransfers, piece_header
+from party.network.ws_relay import PartyRelay
 from party.tests.test_party import make_state, member
+from party.tests.test_relay_replaced import FakeSocket
 
 
 def sha(path) -> str:
@@ -348,7 +351,10 @@ class PartyWiringTests(unittest.TestCase):
         manager = PartyManager(Mock(), make_state())
         manager.party_state.enabled = True
         manager.party_state.my_summoner_id = 1
-        manager._relays = {"a" * 32: SimpleNamespace(members=[member(1, "Me"), member(2, "B", 11, 11002), member(3, "C", 22, 22003)], connected=True)}
+        room = SimpleNamespace(room_key="a" * 32, connected=True,
+                               members=[member(1, "Me"), member(2, "B", 11, 11002), member(3, "C", 22, 22003)])
+        manager._relays = {room.room_key: room}
+        manager._on_relay_members_changed(room)  # as the relay does: a member counts once its key is known
         manager._lobby_matcher = SimpleNamespace(get_team_info=lambda: ({}, set()))
         manager._skin_collector = Mock()
 
@@ -370,6 +376,33 @@ class PartyWiringTests(unittest.TestCase):
             manager._add_relay("a" * 32)
 
         relay_class.return_value.set_direct_callbacks.assert_called_once()
+
+
+
+class DirectMessageIdTests(unittest.IsolatedAsyncioTestCase):
+    """The relay names members by decimal strings, so all 64 bits of an id survive JSON. A message to one
+    member or from one carries the id that way on the wire, and as a number inside Rose."""
+
+    async def test_a_direct_message_names_its_member_by_a_decimal_string_on_the_wire(self):
+        big = (1 << 64) - 1  # more than a JSON number holds exactly
+        relay = PartyRelay("a" * 32, 1, "Me", b"k" * 32)
+        got = []
+        relay.set_direct_callbacks(on_direct=lambda sender, data: got.append((sender, data)),
+                                   on_binary=lambda sender, payload: got.append((sender, payload)))
+        socket = FakeSocket([json.dumps({"type": "from", "from": str(big), "data": {"ask": "mod"}}),
+                             big.to_bytes(8, "little") + b"piece",
+                             json.dumps({"type": "from", "from": big, "data": {}}),     # a number: not the relay's form
+                             json.dumps({"type": "from", "from": "12x", "data": {}})])  # not an id
+
+        await relay._receive(socket)
+
+        self.assertEqual(got, [(big, {"ask": "mod"}), (big, b"piece")])
+
+        relay._ws, relay._connected = socket, True
+        self.assertTrue(await relay.send_to(big, {"ask": "mod"}))
+        self.assertEqual(json.loads(socket.sent[-1]), {"type": "to", "to": str(big), "data": {"ask": "mod"}})
+        self.assertTrue(await relay.send_binary_to(big, b"piece"))
+        self.assertEqual(socket.sent[-1], big.to_bytes(8, "little") + b"piece")
 
 
 if __name__ == "__main__":

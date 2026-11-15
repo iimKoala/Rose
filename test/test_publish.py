@@ -5,6 +5,8 @@ keys and tokens are put together from pieces, so this file itself holds nothing 
 """
 
 import importlib.util
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -62,6 +64,32 @@ class AuditTests(unittest.TestCase):
 
         self.assertEqual(search(b"github.com/StarfallGames/Rose"), set())
         self.assertEqual(search(b"C:\\Users\\jdoe42"), {"the Windows user name"})
+
+
+class PublicParentsTests(unittest.TestCase):
+    def test_a_merge_of_the_original_is_published_as_a_merge_and_only_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            def git(*args) -> str:
+                made_up = ["-c", "user.name=Tester", "-c", "user.email=tester@example.org", "-c", "commit.gpgsign=false"]
+                return subprocess.run(["git", *made_up, *args], cwd=folder, capture_output=True, check=True).stdout.decode().strip()
+
+            git("init", "-q", "-b", "main")
+            git("commit", "-q", "--allow-empty", "-m", "the original, at the fork point")
+            fork_point = git("rev-parse", "HEAD")
+            git("commit", "-q", "--allow-empty", "-m", "the original, newer")
+            newer = git("rev-parse", "HEAD")
+            git("update-ref", "refs/remotes/origin/main", newer)
+            git("reset", "-q", "--hard", fork_point)
+            git("commit", "-q", "--allow-empty", "-m", "the fork's own work")
+            published = git("commit-tree", "HEAD^{tree}", "-p", fork_point, "-m", "public")
+
+            self.assertEqual(publish.public_parents(published, cwd=folder), [published], "HEAD does not hold the original's newer commit")
+
+            git("merge", "-q", "--no-edit", newer)
+            self.assertEqual(publish.public_parents(published, cwd=folder), [published, newer])
+
+            merged = git("commit-tree", "HEAD^{tree}", "-p", published, "-p", newer, "-m", "public merge")
+            self.assertEqual(publish.public_parents(merged, cwd=folder), [merged], "what is published already holds it")
 
 
 if __name__ == "__main__":

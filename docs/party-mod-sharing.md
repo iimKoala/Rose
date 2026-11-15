@@ -22,6 +22,9 @@ with a way to switch off the ones you don't want, and the game does not start be
   `{type:"from", from, data}`), and binary frames whose first 8 bytes name the receiver (the receiver gets
   the sender's id there). Only joined members can send, and only to a member of the same room.
   `PartyRelay.send_to` / `send_binary_to` and `set_direct_callbacks` are the client side.
+  Since Nov 15 (the merge of the original's signed-in relay, protocol 2) `to` and `from` name a member by a
+  decimal string, as the member list does, so all 64 bits of an id survive JSON. A Rose on protocol 2
+  refuses a relay that does not confirm it: the relay is redeployed whenever `room.ts` changes.
 - **Asking and sending** (`party/network/mod_transfer.py`): `mod-want` with the hash, `mod-start` with the
   size, then pieces of 256 KiB (`RMOD` + 8 bytes of the hash + the piece's number), then `mod-end`.
   60 MB took 4.6 s on a relay running on the same PC; on the internet the sender's upload speed decides.
