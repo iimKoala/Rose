@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="Rose: a fork with an account switcher, a mod store, builds and in-game panels">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1428"/>
+      <stop offset="1" stop-color="#1c0d18"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0e6d2"/>
+      <stop offset="1" stop-color="#c8aa6e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.3" r="0.55">
+      <stop offset="0" stop-color="#c03050" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#c03050" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="300" rx="14" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="14" fill="url(#glow)"/>
+  <rect x="14" y="14" width="1172" height="272" rx="6" fill="none" stroke="#c8aa6e" stroke-opacity="0.55"/>
+  <text x="611" y="122" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="88" font-weight="700" letter-spacing="22" fill="url(#gold)">ROSE</text>
+  <path d="M360 152H578M622 152H840" stroke="#c8aa6e" stroke-opacity="0.8"/>
+  <path d="M600 141l11 11-11 11-11-11z" fill="#c03050" stroke="#f0e6d2"/>
+  <text x="600" y="196" text-anchor="middle" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="23" fill="#f0e6d2">A fork of Alban1911/Rose, with more around the skin changer</text>
+  <g font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" letter-spacing="2" text-anchor="middle" fill="#c8aa6e">
+    <g fill="none" stroke="#c8aa6e" stroke-opacity="0.6">
+      <rect x="251" y="222" width="210" height="34" rx="17"/>
+      <rect x="477" y="222" width="140" height="34" rx="17"/>
+      <rect x="633" y="222" width="110" height="34" rx="17"/>
+      <rect x="759" y="222" width="190" height="34" rx="17"/>
+    </g>
+    <text x="356" y="244">ACCOUNT SWITCHER</text>
+    <text x="547" y="244">MOD STORE</text>
+    <text x="688" y="244">BUILDS</text>
+    <text x="854" y="244">IN-GAME PANELS</text>
+  </g>
+</svg>
