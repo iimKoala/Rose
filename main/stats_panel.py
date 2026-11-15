@@ -151,8 +151,7 @@ class StatsPanel:
         self.family, self.emblems = title_font(), {}
         self.top = tk.Toplevel(root)
         self.top.overrideredirect(True)
-        self.top.attributes("-topmost", True)
-        self.top.attributes("-alpha", 0.96)
+        self.top.attributes("-topmost", True)  # fully solid: over a bright, moving game a see-through panel is hard to read
         self.height = HEAD + 5 * ROW + 4 * GAP + 2 * PAD
         self.canvas = tk.Canvas(self.top, width=WIDTH, height=self.height, bg=DARK, highlightthickness=1, highlightbackground=EDGE)
         self.canvas.pack()
