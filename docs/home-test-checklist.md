@@ -197,10 +197,9 @@ Restart Rose, then lock a champion in champ select.
 4. Import **Items**, then open the shop in game: the set's first two titles carry the skill order, like
    "Start (levels 1-3: W Q E)" and "Build in this order (max W > Q > E)".
 
-## 15. Party mode: a friend's custom skin arrives by itself (new, Nov 14; needs the relay first)
-Cannot be tried before the party server is set up (one sign-in to Cloudflare at this PC, see
-`docs/party-mod-sharing.md`). Until then the party panel says "no party server is configured in this build".
-After that, with two PCs on this version, both in one party by the code:
+## 15. Party mode: a friend's custom skin arrives by itself (new, Nov 14; never tried between two PCs)
+The party server is set up (Nov 15, see `docs/party-mod-sharing.md`). Restart Rose on both PCs first; an
+install from GitHub updates itself on start. With two PCs on this version, both in one party by the code:
 1. One picks a champion and a custom skin. On the other PC the friend's row says
    "Custom skin: <name> (asking your friend for it...)", then "downloading N%", then "ready".
 2. **Skin off** on a friend's row: their skin is not applied on this PC and their file is not fetched.

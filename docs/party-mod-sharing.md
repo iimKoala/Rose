@@ -11,8 +11,9 @@ with a way to switch off the ones you don't want, and the game does not start be
   they see the official skin, or nothing when the mod sits on the default skin.
 - Party mode talks through a relay (a Cloudflare Worker, `relay-worker/`). Its address is in a file the
   original keeps out of git (`party/network/relay_config.py`). Run from source there is none, and the panel
-  says "no party server is configured in this build". This version needs a relay of its own; its address
-  goes into that file (added to git here with `git add -f`) once the relay is deployed.
+  says "no party server is configured in this build". This version has a relay of its own, on the
+  developer's Cloudflare account (free plan). Its address is in that file, added to git here with
+  `git add -f` so an install that updates from GitHub gets it.
 
 ## How it works now
 
@@ -55,9 +56,13 @@ with a way to switch off the ones you don't want, and the game does not start be
 
 ## Not done, not checked
 
-- **The relay is not deployed yet**: it needs a sign-in to Cloudflare on the developer's PC. Everything
-  here was tested on a relay running locally (`wrangler dev`) with two of Rose's own party clients, and in
-  unit tests with a stand-in room.
+- Tested with two of Rose's own party clients on one PC, through the deployed relay (Nov 15): they meet in
+  a room, a skin pick arrives, a state of 6 KB arrives, a 60 MB file arrives in 5.3 s, and the safety rules
+  hold. Not tested between two PCs.
+- The relay's address is public (it is in this repo). A stranger could use it for their own parties. On
+  the free plan the worst case is that the day's requests run out and party mode stops until the next day.
+- To change the relay: edit `relay-worker/`, then `npm install` and `npx wrangler deploy` in that folder
+  (signed in with `npx wrangler login`). A new `workers.dev` address needs a few minutes before it answers.
 - Never run in a real champ select or game. The 15 s wait before a game is a guess.
 - Both PCs need this version: an older Rose does not announce the size, so nothing is asked of it.
 - Received files are not run through Rose's mod checker. The folder is only cleaned when it is full.
