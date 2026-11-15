@@ -994,6 +994,9 @@ class ModStorageService:
         self._champion_listing_cache[champion_id_int] = (time.monotonic(), entries)
         return list(entries)
 
+    def has_mods_for_skin(self, skin_id: int | str) -> bool:
+        return bool(self.list_mods_for_skin(skin_id))
+
     def categories_with_mods(self) -> List[str]:
         """Root categories holding at least one saved mod, in menu order (a
         missing one counts: it is listed so it can be deleted)."""

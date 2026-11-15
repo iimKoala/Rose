@@ -5,6 +5,7 @@ Phase Handler
 Handles phase-specific logic and UI management
 """
 
+import logging
 from lcu import LCU
 from lcu.core.lockfile import SWIFTPLAY_QUEUE_IDS
 from state import SharedState
@@ -257,3 +258,4 @@ class PhaseHandler:
         # via cleanup_swiftplay_exit() which also handles the associated
         # tracking/mods state atomically.  Clearing the flag alone would
         # leave orphaned swiftplay_extracted_mods / swiftplay_skin_tracking.
+

@@ -8,6 +8,7 @@ Handles loading and finding skin IDs by name
 import json
 import logging
 from typing import Optional
+from pathlib import Path
 
 from utils.core.paths import get_user_data_dir
 
@@ -133,3 +134,4 @@ class SkinMapping:
         self.skin_mapping_loaded = False
         self.skin_id_mapping.clear()
         self.skin_id_original_name_mapping.clear()
+

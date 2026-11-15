@@ -671,6 +671,14 @@ def _ensure_loader_config() -> None:
         log.warning('Could not enable the Pengu hook in %s: %s', _CONFIG_FILE, exc)
 
 
+def _write_active_flag() -> None:
+    try:
+        _ACTIVE_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _ACTIVE_FLAG.write_text('active', encoding='utf-8')
+    except OSError as exc:
+        log.error('Failed to write legacy Pengu active flag %s: %s', _ACTIVE_FLAG, exc)
+
+
 def _clear_active_flag() -> None:
     try:
         _ACTIVE_FLAG.unlink(missing_ok=True)

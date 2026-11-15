@@ -35,6 +35,70 @@ if sys.platform == "win32":
     _kernel32.CloseHandle.restype = wintypes.BOOL
 
 
+class LockFile:
+    """Context manager for application lock file"""
+    
+    def __init__(self, lock_path: Path):
+        self.path = lock_path
+        self.file_handle = None
+        self._acquired = False
+        
+    def __enter__(self):
+        """Acquire lock file"""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            # Try to create lock file exclusively
+            self.file_handle = open(self.path, 'x')
+            self.file_handle.write(f"{os.getpid()}\n")
+            self.file_handle.write(f"{time.time()}\n")
+            self.file_handle.flush()
+            self._acquired = True
+            app_state = get_app_state()
+            app_state.lock_file = self.file_handle
+            app_state.lock_file_path = self.path
+            return self
+        except FileExistsError:
+            # Check if stale lock
+            if self._is_stale_lock():
+                self.path.unlink()
+                return self.__enter__()  # Retry
+            raise RuntimeError("Another instance is already running")
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Release lock file"""
+        try:
+            if self.file_handle:
+                self.file_handle.close()
+            if self.path.exists():
+                self.path.unlink()
+        except (IOError, OSError, PermissionError) as e:
+            log.debug(f"Lock file cleanup error (non-critical): {e}")
+        return False
+    
+    def _is_stale_lock(self) -> bool:
+        """Check if lock file is from a dead process"""
+        try:
+            with open(self.path, 'r') as f:
+                lines = f.readlines()
+                if len(lines) >= 1:
+                    old_pid = int(lines[0].strip())
+                    # Check if process is still running
+                    try:
+                        import psutil
+                        return not psutil.pid_exists(old_pid)
+                    except ImportError:
+                        # Fallback for Windows
+                        try:
+                            ctypes.windll.kernel32.OpenProcess(0x1000, False, old_pid)
+                            return False  # Process exists
+                        except OSError:
+                            return True  # Process doesn't exist
+        except (IOError, ValueError):
+            return True  # Assume stale if can't read
+        return False
+
+
 def create_lock_file() -> bool:
     """Create a lock file to prevent multiple instances"""
     try:
@@ -237,3 +301,4 @@ def check_single_instance() -> None:
             log.error("Another instance of Rose is already running!")
             log.error("Please close the existing instance before starting a new one.")
         sys.exit(1)
+

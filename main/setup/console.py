@@ -25,11 +25,11 @@ def setup_console() -> None:
         # PROCESS_SYSTEM_DPI_AWARE
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(WINDOWS_DPI_AWARENESS_SYSTEM)
-        except (OSError, AttributeError):
+        except (OSError, AttributeError) as e:
             try:
                 # Fallback for older Windows versions
                 ctypes.windll.user32.SetProcessDPIAware()
-            except (OSError, AttributeError):
+            except (OSError, AttributeError) as e2:
                 # If both fail, continue anyway - not critical
                 pass
         
@@ -166,6 +166,7 @@ def cleanup_console() -> None:
             if console_hwnd:
                 # Free the console
                 ctypes.windll.kernel32.FreeConsole()
-        except (OSError, AttributeError):
+        except (OSError, AttributeError) as e:
             # Logging might not be available at this point
             pass
+

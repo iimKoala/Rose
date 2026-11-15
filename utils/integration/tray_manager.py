@@ -188,6 +188,26 @@ class TrayManager:
         # Left click does nothing, only right click shows menu
         pass
     
+    def _on_settings(self, icon, item):
+        """Open the injection threshold settings dialog."""
+        log.info("Settings requested from system tray")
+        try:
+            from utils.integration.tray_settings import show_injection_settings_dialog
+
+            show_injection_settings_dialog()
+        except Exception as e:
+            log.error(f"Failed to open settings dialog: {e}")
+            try:
+                from utils.system.admin_utils import show_message_box_threaded
+
+                show_message_box_threaded(
+                    f"Failed to open settings dialog:\n\n{e}",
+                    "Rose Settings",
+                    0x10,  # MB_ICONERROR
+                )
+            except Exception:
+                log.debug("Unable to show error message box for settings dialog failure")
+
     def _on_open_mods(self, icon, item):
         """Open the user mods folder in the file explorer."""
         log.info("Open Mods Folder requested from system tray")
@@ -228,7 +248,7 @@ class TrayManager:
         try:
             # Set stop event immediately to signal shutdown
             self._stop_event.set()
-
+            
             # Call the restart callback
             if self.restart_callback:
                 self.restart_callback()
@@ -344,7 +364,7 @@ class TrayManager:
             pystray.MenuItem("Restart", self._on_restart),
             pystray.MenuItem("Quit", self._on_quit),
         )
-
+    
     def _run_tray(self):
         """Run the tray icon in a separate thread"""
         try:  # windows an earlier Rose left open still run that Rose's code
@@ -358,7 +378,7 @@ class TrayManager:
             self._base_icon_image = self._get_icon_image()
             icon_image = self._base_icon_image
             menu = self._create_menu()
-
+            
             self.icon = pystray.Icon(
                 "Rose",
                 icon_image,
@@ -366,12 +386,13 @@ class TrayManager:
                 menu,
                 default_action=self._on_icon_click
             )
+            
             log.info("System tray icon started")
             # Use run_detached to prevent blocking the main thread
             self.icon.run_detached()
         except Exception as e:
             log.error(f"Failed to start system tray: {e}")
-        
+    
     def start(self):
         """Start the system tray icon"""
         if self.tray_thread and self.tray_thread.is_alive():
@@ -398,17 +419,30 @@ class TrayManager:
                 log.info("System tray icon stopped")
             except Exception as e:
                 log.error(f"Failed to stop system tray icon: {e}")
-
+        
         if self.tray_thread and self.tray_thread.is_alive():
             self.tray_thread.join(timeout=TRAY_THREAD_JOIN_TIMEOUT_S)
-
+    
     def is_running(self) -> bool:
         """Check if the tray icon is running"""
         return self.icon is not None and self.tray_thread is not None and self.tray_thread.is_alive()
-
+    
+    def wait_for_quit(self, timeout: Optional[float] = None) -> bool:
+        """
+        Wait for quit signal from tray
+        
+        Args:
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if quit was requested, False if timeout
+        """
+        return self._stop_event.wait(timeout)
+    
     def set_status(self, status: str):
         """
         Update the tray icon to show the specified status
+        
         Args:
             status: "locked" or "unlocked"
         """
@@ -416,14 +450,14 @@ class TrayManager:
         max_wait = TRAY_READY_MAX_WAIT_S
         wait_interval = TRAY_READY_CHECK_INTERVAL_S
         elapsed = 0.0
-
+        
         while (not self.icon or not self._base_icon_image) and elapsed < max_wait:
             threading.Event().wait(wait_interval)
             elapsed += wait_interval
-
+        
         if not self.icon or not self._base_icon_image:
             return
-
+        
         try:
             if status == "locked":
                 # Show locked icon
@@ -447,3 +481,15 @@ class TrayManager:
                 self.icon.title = title
         except Exception as e:
             log.debug(f"Failed to update tray title: {e}")
+
+    def set_downloading(self, is_downloading: bool):
+        """
+        Update the tray icon to show downloading status (legacy method for compatibility)
+        
+        Args:
+            is_downloading: True to show locked icon, False to show golden unlocked icon
+        """
+        if is_downloading:
+            self.set_status("locked")
+        else:
+            self.set_status("unlocked")

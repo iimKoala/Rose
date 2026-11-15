@@ -7,7 +7,7 @@ native/ltf/) and the LTK Manager install it drives.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from utils.core.logging import get_logger
 
@@ -93,6 +93,14 @@ class ToolsManager:
             log.warning("Reinstall Rose, or allow its files through your antivirus.")
             return False
         return True
+
+    def detect_tools(self) -> Dict[str, Path]:
+        """Detect runtime injection tools."""
+        tools: Dict[str, Path] = {"ltf_launcher": self.tools_dir / LTF_LAUNCHER}
+        for name, exe in tools.items():
+            if not exe.exists():
+                log.error(f"[INJECTOR] Missing tool: {exe}")
+        return tools
 
     def detect_ltf_launcher(self) -> Optional[Path]:
         """The LTF launcher, if it and its bridge DLL are both in the tools folder.

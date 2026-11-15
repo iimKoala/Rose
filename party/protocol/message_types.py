@@ -100,3 +100,110 @@ class SkinSelection:
             chroma_id=data.get("chroma_id"),
             custom_mod_path=data.get("custom_mod_path"),
         )
+
+
+# Message factory functions
+def create_hello(summoner_id: int, summoner_name: str, encryption_key: bytes) -> Message:
+    """Create HELLO handshake message"""
+    return Message(
+        type=MessageType.HELLO,
+        payload={
+            "summoner_id": summoner_id,
+            "summoner_name": summoner_name,
+            "key": encryption_key.hex(),
+            "version": 1,
+        },
+    )
+
+
+def create_hello_ack(summoner_id: int, summoner_name: str) -> Message:
+    """Create HELLO_ACK response"""
+    return Message(
+        type=MessageType.HELLO_ACK,
+        payload={
+            "summoner_id": summoner_id,
+            "summoner_name": summoner_name,
+        },
+    )
+
+
+def create_ping(sequence: int = 0) -> Message:
+    """Create PING message"""
+    return Message(type=MessageType.PING, sequence=sequence)
+
+
+def create_pong(sequence: int = 0) -> Message:
+    """Create PONG response"""
+    return Message(type=MessageType.PONG, sequence=sequence)
+
+
+def create_skin_update(selection: SkinSelection) -> Message:
+    """Create SKIN_UPDATE message"""
+    return Message(
+        type=MessageType.SKIN_UPDATE,
+        payload=selection.to_dict(),
+    )
+
+
+def create_skin_sync(selections: list[SkinSelection]) -> Message:
+    """Create SKIN_SYNC message with all skin selections"""
+    return Message(
+        type=MessageType.SKIN_SYNC,
+        payload={
+            "selections": [s.to_dict() for s in selections],
+        },
+    )
+
+
+def create_skin_clear(summoner_id: int, champion_id: int) -> Message:
+    """Create SKIN_CLEAR message"""
+    return Message(
+        type=MessageType.SKIN_CLEAR,
+        payload={
+            "summoner_id": summoner_id,
+            "champion_id": champion_id,
+        },
+    )
+
+
+def create_lobby_info(
+    summoner_id: int,
+    lobby_summoner_ids: list[int],
+    game_mode: Optional[str] = None,
+) -> Message:
+    """Create LOBBY_INFO message"""
+    return Message(
+        type=MessageType.LOBBY_INFO,
+        payload={
+            "summoner_id": summoner_id,
+            "lobby_summoner_ids": lobby_summoner_ids,
+            "game_mode": game_mode,
+        },
+    )
+
+
+def create_lobby_match(matched: bool, common_summoner_ids: list[int]) -> Message:
+    """Create LOBBY_MATCH confirmation"""
+    return Message(
+        type=MessageType.LOBBY_MATCH,
+        payload={
+            "matched": matched,
+            "common_summoner_ids": common_summoner_ids,
+        },
+    )
+
+
+def create_ready() -> Message:
+    """Create READY message"""
+    return Message(type=MessageType.READY)
+
+
+def create_error(code: str, message: str) -> Message:
+    """Create ERROR message"""
+    return Message(
+        type=MessageType.ERROR,
+        payload={
+            "code": code,
+            "message": message,
+        },
+    )

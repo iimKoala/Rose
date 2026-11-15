@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from utils.core.logging import get_logger
+from utils.core.logging import get_logger, log_action, log_success
 from utils.core.paths import get_classic_skins_dir, get_skins_dir, get_injection_dir
 from utils.core.issue_reporter import report_issue
 from utils.core.junction import safe_remove_entry
@@ -239,6 +239,7 @@ class SkinInjector:
         """
         injection_start_time = time.time()
 
+
         # Clean mods and overlay directories, then link the new skin
         clean_start = time.time()
         self._clean_mods_dir()
@@ -323,6 +324,11 @@ class SkinInjector:
             log.warning(f"[INJECT] Party/extra mods injection failed with code {result}")
         return result == 0
 
+    def inject_mods_only(self, timeout: int = 60, stop_callback=None) -> bool:
+        """Disabled: installed mods folder removed"""
+        log.warning("[INJECT] Mods-only injection is disabled (installed mods folder removed)")
+        return False
+    
     def inject_skin_for_testing(self, skin_name: str) -> bool:
         """Inject a skin for testing - installs it without starting the patcher"""
         try:

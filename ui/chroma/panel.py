@@ -7,7 +7,8 @@ Chroma Panel Manager - Coordinates chroma panel and button widgets
 
 import threading
 from typing import Callable, List, Dict
-from utils.core.logging import get_logger, log_event
+from utils.core.logging import get_logger, log_event, log_action, log_success
+from utils.core.utilities import is_default_skin, is_owned, is_base_skin_owned
 
 log = get_logger()
 
@@ -54,6 +55,15 @@ class ChromaPanelManager:
         with self.lock:
             self.pending_destroy = True
             log.debug("[CHROMA] Destroy panel requested")
+    
+    def request_rebuild(self):
+        """Request to rebuild the panel (thread-safe, for resolution changes)"""
+        with self.lock:
+            if not self._rebuilding:
+                self.pending_rebuild = True
+                log.info("[CHROMA] Rebuild requested (widgets will be destroyed and recreated)")
+            else:
+                log.debug("[CHROMA] Rebuild already in progress, ignoring duplicate request")
     
     def update_positions(self):
         """Legacy resolution/focus updater – now a no-op (no Qt widgets)."""
@@ -220,6 +230,14 @@ class ChromaPanelManager:
             except Exception as e:
                 log.debug(f"[CHROMA] Failed to broadcast chroma state on show: {e}")
             
+    
+    def show_wheel_directly(self):
+        """Request to show the chroma panel for current skin (called by JavaScript plugin)"""
+        with self.lock:
+            if self.current_skin_name and self.current_chromas:
+                log.info(f"[CHROMA] Request to show panel for {self.current_skin_name}")
+                self.pending_show = (self.current_skin_name, self.current_chromas)
+    
     def process_pending(self):
         """Process pending show/hide requests (must be called from main thread) - NON-BLOCKING"""
         # Try to acquire lock with timeout to avoid blocking
@@ -276,6 +294,7 @@ class ChromaPanelManager:
         """Clean up resources (called on app exit or UI destruction)"""
         try:
             # Try to acquire lock with timeout to avoid deadlock
+            import time
             lock_acquired = False
             try:
                 lock_acquired = self.lock.acquire(timeout=0.05)  # 50ms timeout
@@ -301,6 +320,8 @@ class ChromaPanelManager:
             import traceback
             log.error(f"[CHROMA] Cleanup traceback: {traceback.format_exc()}")
     
+    
+
 
 # Global panel manager instance
 _chroma_panel_manager = None

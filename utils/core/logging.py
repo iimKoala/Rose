@@ -8,6 +8,7 @@ Logging configuration and utilities
 import copy
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -428,6 +429,7 @@ def setup_logging(log_mode: str = 'customer', *, write_logs: bool = True):
     urllib3.disable_warnings(InsecureRequestWarning)
     
 
+
 class _ThreadExceptionLogger:
     """``threading.excepthook`` that logs the traceback and then delegates to the previous hook."""
 
@@ -579,6 +581,29 @@ def cleanup_logs():
     except Exception as e:
         # Don't log this error to avoid recursion
         print(f"Warning: Failed to cleanup logs: {e}", file=sys.stderr)
+
+
+def _clear_log_file(log_file: Path):
+    """Clear the content of a log file"""
+    try:
+        if log_file.exists():
+            # Truncate the file to 0 bytes
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write("")
+            
+            # Also clean up backup files
+            for backup_file in log_file.parent.glob(f"{log_file.name}.*"):
+                if backup_file.is_file():
+                    backup_file.unlink()
+                    
+    except Exception:
+        # Silently ignore cleanup errors
+        pass
+
+
+def cleanup_logs_on_startup():
+    """Clean up old log files when the application starts"""
+    cleanup_logs()
 
 
 # ==================== Pretty Logging Helpers ====================

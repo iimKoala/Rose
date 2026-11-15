@@ -122,6 +122,10 @@ class PartyManager:
     def enabled(self) -> bool:
         return self.party_state.enabled
 
+    @property
+    def my_token_str(self) -> Optional[str]:
+        return self._fresh_token()
+
     def set_callbacks(
         self,
         on_state_change: Optional[Callable[[PartyState], None]] = None,

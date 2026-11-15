@@ -5,6 +5,7 @@ Integration Utilities
 
 This subpackage contains UI and system integration utilities:
 - tray_manager: System tray manager
+- tray_settings: Tray settings management
 - pengu_loader: Pengu Loader integration
 """
 
@@ -37,3 +38,4 @@ __all__ = [
     'recover_stale_session',
     'restart_client',
 ]
+

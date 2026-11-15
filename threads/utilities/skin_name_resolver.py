@@ -5,6 +5,7 @@ Skin Name Resolver
 Resolves skin name for injection based on state (historic, random, or hovered)
 """
 
+import logging
 import time
 from typing import Optional
 
@@ -157,3 +158,54 @@ class SkinNameResolver:
         else:
             self._log_no_skin_id_available()
             return None
+    
+    def build_skin_label(self) -> Optional[str]:
+        """Build clean skin label for logging
+        
+        Returns:
+            Clean skin label or None
+        """
+        raw = self.state.last_hovered_skin_key or self.state.last_hovered_skin_slug \
+            or (str(self.state.last_hovered_skin_id) if self.state.last_hovered_skin_id else None)
+        
+        if not raw:
+            return None
+        
+        try:
+            champ_id = self.state.locked_champ_id or self.state.hovered_champ_id
+            cname = ""
+            if champ_id and self.skin_scraper and self.skin_scraper.cache.is_loaded_for_champion(champ_id):
+                cname = self.skin_scraper.cache.champion_name or ""
+
+            # Get skin name from LCU
+            base = ""
+            if self.state.last_hovered_skin_id and self.skin_scraper and self.skin_scraper.cache.is_loaded_for_champion(champ_id):
+                skin_data = self.skin_scraper.cache.get_skin_by_id(self.state.last_hovered_skin_id)
+                if skin_data:
+                    base = skin_data.get('skinName', '').strip()
+            
+            if not base:
+                base = (raw or "").strip()
+
+            # Normalize spaces and apostrophes
+            base_clean = base.replace(" ", " ").replace("'", "'")
+            c_clean = (cname or "").replace(" ", " ").replace("'", "'")
+
+            # Remove champion prefix if present
+            if c_clean and base_clean.lower().startswith(c_clean.lower() + " "):
+                base_clean = base_clean[len(c_clean) + 1:].lstrip()
+            elif c_clean and base_clean.lower().endswith(" " + c_clean.lower()):
+                base_clean = base_clean[:-(len(c_clean) + 1)].rstrip()
+
+            # Check if champion name is already included
+            nb = base_clean.lower().strip() if base_clean else ""
+            nc = c_clean.lower().strip() if c_clean else ""
+            if nc and (nc in nb.split()):
+                final_label = base_clean
+            else:
+                final_label = (base_clean + (" " + c_clean if c_clean else "")).strip()
+            
+            return final_label
+        except Exception:
+            return raw or ""
+

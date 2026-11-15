@@ -52,7 +52,7 @@ class LCUConnection:
             "https": None,
         })  # explicit None keeps Requests from re-reading env vars later
         return session
-
+    
     def _init_from_lockfile(self):
         """Initialize from lockfile or a running regional client's arguments."""
         global _announced_port

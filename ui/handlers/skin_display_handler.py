@@ -94,6 +94,9 @@ class SkinDisplayHandler:
         # Special case: Viego forms (IDs 234994-234999) should always show UnownedFrame
         is_viego_form = skin_id in (234994, 234995, 234996, 234997, 234998, 234999)
         
+        # Same-base chroma swap occurs when switching from base skin (or its chroma) to another chroma of same base
+        is_same_base_chroma = (not is_base_skin_var) and (prev_base_skin_id is not None) and (new_base_skin_id == prev_base_skin_id)
+        
         # Determine what to show
         should_show_chroma_ui = has_chromas
         
@@ -277,3 +280,4 @@ class SkinDisplayHandler:
                 log.debug("[UI] ChromaUI hidden")
             except Exception as e:
                 log.debug(f"[UI] Error hiding ChromaUI: {e}")
+

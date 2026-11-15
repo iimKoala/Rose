@@ -155,6 +155,7 @@ class WebSocketConnection:
 
     def _on_open(self, ws):
         """WebSocket connection opened"""
+        from utils.core.logging import log_status
         
         separator = "=" * 80
         log.info(separator)

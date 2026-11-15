@@ -80,3 +80,4 @@ def perform_cleanup(state: SharedState, thread_manager: ThreadManager, tray_mana
     
     # Clean up console if we allocated one
     cleanup_console()
+

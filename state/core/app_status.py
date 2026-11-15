@@ -115,6 +115,7 @@ class AppStatus:
             log.debug(f"Failed to check skins directory: {e}")
             return False
     
+    
     def update_status(self, force=False):
         """
         Update the application status by checking skin download state
@@ -134,6 +135,7 @@ class AppStatus:
         # Check each component
         self._skins_downloaded = self.check_skins_downloaded()
         self._previews_downloaded = self.check_previews_downloaded()
+        
         
         # Determine status level - only show unlocked if download process is complete
         all_ready = (self._skins_downloaded and self._previews_downloaded and self._download_process_complete)
@@ -165,7 +167,36 @@ class AppStatus:
                 log.info(f"   Previews: {'Downloaded' if self._previews_downloaded else 'Pending'}")
                 log.info(separator)
     
+    def mark_skins_downloaded(self):
+        """Mark skins as downloaded and update status"""
+        self._skins_downloaded = True
+        self.update_status(force=True)
+    
+    def mark_previews_downloaded(self):
+        """Mark previews as downloaded and update status"""
+        self._previews_downloaded = True
+        self.update_status(force=True)
+    
     def mark_download_process_complete(self):
         """Mark download process as complete and update status"""
         self._download_process_complete = True
         self.update_status(force=True)
+    
+    
+    def get_status_summary(self) -> dict:
+        """
+        Get a summary of the current status
+        
+        Returns:
+            Dictionary with status of each component
+        """
+        return {
+            'skins_downloaded': self._skins_downloaded,
+            'previews_downloaded': self._previews_downloaded,
+            'all_ready': (self._skins_downloaded and self._previews_downloaded)
+        }
+    
+    @property
+    def is_ready(self) -> bool:
+        """Check if all components are ready"""
+        return (self._skins_downloaded and self._previews_downloaded)

@@ -127,6 +127,8 @@ def register_autostart():
     else:
         exe_path = Path(sys.argv[0]).resolve()
     
+    exe_dir = Path(exe_path).parent
+    
     # Check if already registered
     if is_registered_for_autostart():
         return True, "Already registered for auto-start"
@@ -234,6 +236,26 @@ def show_admin_required_dialog():
         "Click 'Yes' on the UAC prompt to continue.",
         "Administrator Rights Required",
         0x30  # MB_ICONWARNING
+    )
+
+
+def show_autostart_success_dialog():
+    """Show a dialog box confirming auto-start registration"""
+    show_message_box_threaded(
+        "Rose will now start automatically when turn on your computer.",
+        "Auto-Start Enabled",
+        0x40  # MB_ICONINFORMATION
+    )
+
+
+def show_autostart_removed_dialog():
+    """Show a dialog box confirming auto-start removal"""
+    show_message_box_threaded(
+        "Rose has been removed from auto-start.\n\n"
+        "The application will no longer start automatically with Windows.\n\n"
+        "You can re-enable auto-start from the settings menu.",
+        "Auto-Start Removed",
+        0x40  # MB_ICONINFORMATION
     )
 
 

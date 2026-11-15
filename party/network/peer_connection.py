@@ -7,6 +7,7 @@ This module kept for imports used by other modules.
 """
 
 from enum import Enum
+from dataclasses import dataclass
 from typing import Optional
 
 from ..protocol.message_types import SkinSelection

@@ -115,7 +115,7 @@ def build_with_pyinstaller():
     print(f"Running: {' '.join(cmd)}\n")
     
     try:
-        subprocess.run(cmd, check=True, cwd=ROOT)
+        result = subprocess.run(cmd, check=True, cwd=ROOT)
         print("\n[OK] PyInstaller build completed successfully!")
         return True
     except subprocess.CalledProcessError as e:
@@ -197,3 +197,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

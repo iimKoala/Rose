@@ -6,6 +6,8 @@ Routes and handles different WebSocket message types
 """
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import os
@@ -484,7 +486,7 @@ class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersM
         elif payload.get("skin"):
             # Handle skin detection message
             self._handle_skin_detection(payload)
-
+    
     def _handle_chroma_log(self, payload: dict) -> None:
         """Forward structured plugin logs at their requested severity."""
         source = str(payload.get("source") or "UnknownPlugin")[:64]
@@ -1526,6 +1528,52 @@ class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersM
         # Auto-select historic mod if available and not already selected
         if historic_announcer_path and not getattr(self.shared_state, 'selected_announcer_mod', None):
             self._auto_select_historic_mod("announcer", historic_announcer_path, announcers)
+    
+    def _handle_request_others(self, payload: dict) -> None:
+        """Return the list of others"""
+        if not self.mod_storage:
+            return
+        
+        try:
+            others = self.mod_storage.list_mods_for_category(self.mod_storage.CATEGORY_OTHERS)
+        except Exception as exc:
+            log.error(f"[SkinMonitor] Failed to list others: {exc}")
+            others = []
+        
+        # Get historic mod and add it to response
+        historic_other_paths = None
+        try:
+            from utils.core.mod_historic import get_historic_mod
+            historic_other_paths = get_historic_mod("other")
+            # Convert to list if it's a single string (legacy format)
+            if isinstance(historic_other_paths, str):
+                historic_other_paths = [historic_other_paths]
+        except Exception as e:
+            log.warning('[SkinMonitor] Could not load saved other mods selection; it will not be restored: %s', e)
+        
+        response_payload = {
+            "type": "others-response",
+            "others": others,
+            "historicMod": historic_other_paths,  # List of historic mod identifiers (or None)
+            "timestamp": int(time.time() * 1000),
+        }
+        self._send_response(json.dumps(response_payload))
+        
+        # Auto-select historic mods if available and not already selected
+        selected_other_mods = getattr(self.shared_state, 'selected_other_mods', None)
+        if not selected_other_mods:
+            # Fallback to legacy single mod
+            selected_other_mod = getattr(self.shared_state, 'selected_other_mod', None)
+            if selected_other_mod:
+                selected_other_mods = [selected_other_mod]
+        if historic_other_paths and (not selected_other_mods or len(selected_other_mods) == 0):
+            # Handle multiple historic other mods
+            if isinstance(historic_other_paths, list):
+                for historic_path in historic_other_paths:
+                    self._auto_select_historic_mod("other", historic_path, others)
+            else:
+                # Legacy single mod format
+                self._auto_select_historic_mod("other", historic_other_paths, others)
     
     def _handle_select_skin_mod(self, payload: dict) -> None:
         """Handle mod selection for injection over hovered skin"""
@@ -3423,6 +3471,7 @@ class MessageHandler(AccountHandlersMixin, BuildHandlersMixin, ModStoreHandlersM
             if not party_manager:
                 # Initialize party manager
                 from party.core.party_manager import PartyManager
+                from lcu import LCU
 
                 # Get LCU instance from skin_scraper
                 lcu = self.skin_scraper.lcu if self.skin_scraper else None

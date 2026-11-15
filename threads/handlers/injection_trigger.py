@@ -5,6 +5,7 @@ Injection Trigger
 Handles triggering skin injection based on countdown timer
 """
 
+import logging
 import threading
 import time
 from typing import TYPE_CHECKING, Callable, Optional
@@ -683,6 +684,7 @@ class InjectionTrigger:
         log.info("=" * LOG_SEPARATOR_WIDTH)
 
         try:
+            lcu_skin_id = self.state.selected_skin_id
             owned_skin_ids = self.state.owned_skin_ids
             
             # Auto-select previously used custom mods (so users don't need to open the Custom Mods UI)
@@ -1896,3 +1898,4 @@ class InjectionTrigger:
             log.error(f"[INJECT] Error injecting custom mod: {e}")
             import traceback
             log.error(f"[INJECT] Traceback: {traceback.format_exc()}")
+

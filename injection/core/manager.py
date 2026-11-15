@@ -8,12 +8,14 @@ Manages the injection process and coordinates with UI detection system
 import shutil
 import threading
 import time
+import sys
 import uuid
 from pathlib import Path
 from typing import Optional
 
 from config import (
-    INJECTION_LOCK_TIMEOUT_S
+    INJECTION_LOCK_TIMEOUT_S,
+    get_config_file_path
 )
 from utils.core.logging import get_logger, log_action, log_success
 from utils.core.issue_reporter import report_issue
@@ -385,6 +387,68 @@ class InjectionManager:
             self.current_champion = champion_name
             log.debug(f"[INJECT] Champion locked: {champion_name}")
     
+    
+    def update_skin(self, skin_name: str):
+        """Update the current skin and potentially trigger injection"""
+        if not skin_name:
+            log.debug("[INJECT] No skin name available - skipping injection (mods-only flow disabled)")
+            return
+        
+        self._ensure_initialized()
+        self.refresh_injection_threshold()
+        
+        # Don't attempt injection if system isn't properly initialized
+        if not self._initialized or self.injector is None or self.injector.game_dir is None:
+            return
+            
+        with self.injection_lock:
+            current_time = time.time()
+
+            elapsed = current_time - self.last_injection_time
+            if self.last_injection_time and elapsed < self.injection_threshold:
+                remaining = self.injection_threshold - elapsed
+                log.debug(f"[INJECT] Skipping injection for '{skin_name}' (cooldown {remaining:.2f}s remaining)")
+                report_issue(
+                    "INJECTION_SKIPPED_COOLDOWN",
+                    "info",
+                    "Injection skipped (cooldown still active).",
+                    details={
+                        "remaining_s": f"{remaining:.2f}",
+                        "threshold_s": f"{self.injection_threshold:.2f}",
+                        "skin": skin_name,
+                    },
+                    hint="Wait a bit, or lower the Injection Cooldown/Threshold in Settings.",
+                )
+                return
+
+            # Disconnect from UIA window when injection threshold triggers
+            # (launcher closes when game starts, so the window is gone)
+            if self.shared_state and self.shared_state.ui_skin_thread:
+                try:
+                    self.shared_state.ui_skin_thread.force_disconnect()
+                except Exception as e:
+                    log.debug(f"[INJECT] Failed to disconnect UIA: {e}")
+            
+            # LTK Manager takes seconds to start: bring it up now if the
+            # countdown did not already (the injection waits for that connect)
+            self.start_patcher_in_background()
+
+            success = self.injector.inject_skin(
+                skin_name,
+                stop_callback=None,
+            )
+
+            if success:
+                self.last_skin_name = skin_name
+                self.last_injection_time = current_time
+            
+            # The injection took the countdown's session over: staging ends
+            self.discard_early_patcher()
+    
+    def _check_and_inject_mods_only(self):
+        """Mods-only injection is disabled because the installed mods directory was removed."""
+        log.info("[INJECT] Mods-only injection skipped (installed mods folder removed)")
+    
     def on_loadout_countdown(self, seconds_remaining: int):
         """Called during loadout countdown - no longer used (monitor starts with injection)"""
         # Monitor now starts when injection actually begins, not at T-1
@@ -624,6 +688,11 @@ class InjectionManager:
             
             threading.Thread(target=init_thread, daemon=True).start()
     
+    @property
+    def last_injected_skin(self) -> Optional[str]:
+        """Get the last successfully injected skin"""
+        return self.last_skin_name
+    
     def stop_overlay_process(self):
         """Stop the current overlay process"""
         if not self._initialized:
@@ -692,3 +761,34 @@ class InjectionManager:
             self.injector.kill_all_modtools_processes()
         except Exception as e:
             log.warning(f"[INJECT] Failed to kill LTK Manager processes: {e}")
+    
+    def _get_injection_dir(self) -> Path:
+        """Get the injection directory path (works in both frozen and development environments)"""
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable (PyInstaller)
+            # Handle both onefile (_MEIPASS) and onedir (_internal) modes
+            if hasattr(sys, '_MEIPASS'):
+                # One-file mode: tools are in _MEIPASS (temporary extraction directory)
+                base_path = Path(sys._MEIPASS)
+                injection_dir = base_path / "injection"
+            else:
+                # One-dir mode: tools are alongside executable
+                base_dir = Path(sys.executable).parent
+                possible_injection_dirs = [
+                    base_dir / "injection",  # Direct path
+                    base_dir / "_internal" / "injection",  # _internal folder
+                ]
+                
+                injection_dir = None
+                for dir_path in possible_injection_dirs:
+                    if dir_path.exists():
+                        injection_dir = dir_path
+                        break
+                
+                if not injection_dir:
+                    injection_dir = possible_injection_dirs[0]
+        else:
+            # Running as Python script
+            injection_dir = Path(__file__).parent.parent
+        
+        return injection_dir

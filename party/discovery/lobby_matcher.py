@@ -5,12 +5,13 @@ Lobby Matcher
 Matches connected peers to lobby/champion select members
 """
 
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from lcu import LCU
 from state import SharedState
 from utils.core.logging import get_logger
 
+from ..network.peer_connection import PeerConnection
 
 log = get_logger()
 
@@ -145,6 +146,36 @@ class LobbyMatcher:
 
         return "Unknown"
 
+    def match_peers_to_lobby(
+        self, peers: List[PeerConnection]
+    ) -> Dict[int, PeerConnection]:
+        """Match connected peers to lobby members
+
+        Args:
+            peers: List of connected peer connections
+
+        Returns:
+            Dict mapping summoner_id to PeerConnection for peers in lobby
+        """
+        lobby_ids = self.get_all_summoner_ids()
+
+        if not lobby_ids:
+            log.debug("[LOBBY] No lobby members found")
+            return {}
+
+        matched = {}
+        for peer in peers:
+            if peer.is_connected and peer.summoner_id in lobby_ids:
+                matched[peer.summoner_id] = peer
+                peer.peer_info.in_lobby = True
+            else:
+                peer.peer_info.in_lobby = False
+
+        if matched:
+            log.info(f"[LOBBY] Matched {len(matched)} peers to lobby members")
+
+        return matched
+
     def get_team_info(self) -> Tuple[Dict[int, int], Set[int]]:
         """Get our champion select team
 
@@ -179,3 +210,15 @@ class LobbyMatcher:
             log.debug(f"[LOBBY] Error getting team champions: {e}")
 
         return mapping, champions
+
+    def is_in_same_lobby(self, peer_summoner_ids: List[int]) -> bool:
+        """Check if given peers are in our lobby
+
+        Args:
+            peer_summoner_ids: List of peer summoner IDs to check
+
+        Returns:
+            True if at least one peer is in our lobby
+        """
+        lobby_ids = self.get_all_summoner_ids()
+        return bool(lobby_ids.intersection(peer_summoner_ids))

@@ -29,12 +29,17 @@ HBRUSH = getattr(wintypes, "HBRUSH", wintypes.HANDLE)
 # Win32 constants
 # ---------------------------------------------------------------------------
 
+WM_NULL = 0x0000
 WM_CREATE = 0x0001
 WM_DESTROY = 0x0002
+WM_MOVE = 0x0003
+WM_SIZE = 0x0005
 WM_CLOSE = 0x0010
 WM_COMMAND = 0x0111
 WM_HSCROLL = 0x0114
+WM_NOTIFY = 0x004E
 WM_SETFONT = 0x0030
+WM_GETMINMAXINFO = 0x0024
 WM_NCCREATE = 0x0081
 WM_NCDESTROY = 0x0082
 WM_SETICON = 0x0080
@@ -61,6 +66,7 @@ WS_MINIMIZEBOX = 0x00020000
 WS_MAXIMIZEBOX = 0x00010000
 WS_VISIBLE = 0x10000000
 WS_CHILD = 0x40000000
+WS_GROUP = 0x00020000
 WS_TABSTOP = 0x00010000
 
 WS_OVERLAPPEDWINDOW = (
@@ -69,6 +75,7 @@ WS_OVERLAPPEDWINDOW = (
 
 WS_EX_APPWINDOW = 0x00040000
 WS_EX_CLIENTEDGE = 0x00000200
+WS_EX_WINDOWEDGE = 0x00000100
 
 BS_PUSHBUTTON = 0x00000000
 BS_DEFPUSHBUTTON = 0x00000001
@@ -96,11 +103,16 @@ SS_CENTER = 0x00000001
 TBM_GETPOS = WM_USER
 TBM_SETPOS = WM_USER + 5
 TBM_SETRANGE = WM_USER + 6
+TBM_SETRANGEMIN = WM_USER + 7
+TBM_SETRANGEMAX = WM_USER + 8
 
 DEFAULT_GUI_FONT = 17  # Stock font identifier for GetStockObject
 
 ICC_BAR_CLASSES = 0x00000004
 ICC_PROGRESS_CLASS = 0x00000020
+
+TRANSPARENT = 1
+NULL_BRUSH = 5
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +535,19 @@ class Win32Window:
         style = (style | add) & ~remove
         SetWindowLongPtr(hwnd, GWL_STYLE, style)
 
+    def set_window_ex_styles(self, hwnd: wintypes.HWND, add: int = 0, remove: int = 0) -> None:
+        if not hwnd:
+            return
+        style = GetWindowLongPtr(hwnd, GWL_EXSTYLE)
+        style = (style | add) & ~remove
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, style)
+
+    def enable_text_transparency(self, hwnd: wintypes.HWND) -> None:
+        if not hwnd:
+            return
+        self.set_window_styles(hwnd, remove=(0x0001 | 0x0002))  # remove SS_CENTER / SS_RIGHT
+        self.set_window_ex_styles(hwnd, add=WS_EX_TRANSPARENT)
+
     def set_label_text(self, hwnd: wintypes.HWND, text: str) -> None:
         if not hwnd:
             return
@@ -620,3 +645,4 @@ __all__ = [
     "kernel32",
     "SW_SHOWNORMAL",
 ]
+

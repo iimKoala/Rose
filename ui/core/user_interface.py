@@ -10,10 +10,12 @@ Manages ChromaUI and UnownedFrame as separate components
 import threading
 
 # Local imports
+from ui.chroma.ui import ChromaUI
 from utils.core.logging import get_logger
 
 from ui.handlers.historic_mode_handler import HistoricModeHandler
 from ui.handlers.randomization_handler import RandomizationHandler
+from ui.handlers.skin_display_handler import SkinDisplayHandler
 from ui.core.lifecycle_manager import UILifecycleManager
 
 log = get_logger()
@@ -39,7 +41,24 @@ class UserInterface:
         self.randomization_handler = RandomizationHandler(state, skin_scraper)
         self.skin_display_handler = None  # Will be initialized when chroma_ui is created
     
+    # Legacy methods - no-op for compatibility
+    def create_click_catchers(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
     def _try_show_click_blocker(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _show_click_blocker_on_main_thread(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _hide_click_blocker_with_delay(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def create_click_catchers_for_finalization(self):
         """Legacy method - no-op for compatibility."""
         pass
     
@@ -84,12 +103,13 @@ class UserInterface:
                     self.skin_display_handler.chroma_ui = self.lifecycle_manager.chroma_ui
                 
                 # Pass OLD values (before update) to SkinDisplayHandler for duplicate checking
-                new_base_skin_id, _ = self.skin_display_handler.show_skin(
+                new_base_skin_id, prev_base_skin_id = self.skin_display_handler.show_skin(
                     skin_id, skin_name, champion_name, champion_id,
                     old_skin_id, old_skin_name, old_champion_name
                 )
             else:
                 new_base_skin_id = None
+                prev_base_skin_id = None
             
             # Cancel randomization if skin changed and random mode is active
             if self.state.random_mode_active and not self.randomization_handler.randomization_in_progress:
@@ -225,7 +245,64 @@ class UserInterface:
             
             log.debug("[UI] Skin state reset for new ChampSelect")
     
+    # Legacy methods - no-op for compatibility
+    def _show_unowned_frame(self, skin_id: int, skin_name: str, champion_name: str = None, is_same_base_chroma: bool = False):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _hide_unowned_frame(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _on_click_catcher_hide_clicked(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
     def _on_click_catcher_clicked(self, instance_name: str):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _create_show_instances_for_panel(self, panel_name: str):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _destroy_all_show_instances(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _hide_all_ui_elements(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _show_all_ui_elements(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def show_click_catcher_hide(self, x, y, width=50, height=50):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def hide_click_catcher_hide(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def show_click_catcher(self, instance_name: str):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def hide_click_catcher(self, instance_name: str):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def show_all_click_catchers(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def hide_all_click_catchers(self):
+        """Legacy method - no-op for compatibility."""
+        pass
+    
+    def _show_click_catchers(self):
         """Legacy method - no-op for compatibility."""
         pass
     

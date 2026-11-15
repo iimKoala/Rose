@@ -5,13 +5,14 @@ Champion Lock Handler
 Handles champion lock and exchange detection
 """
 
+import logging
 import time
 from typing import Optional
 
 from lcu import LCU, compute_locked
 from state import SharedState
 from ui.chroma.selector import get_chroma_selector
-from utils.core.logging import get_logger, log_event
+from utils.core.logging import get_logger, log_status, log_event
 
 log = get_logger()
 
@@ -267,3 +268,4 @@ class ChampionLockHandler:
                     self.state.ui_skin_thread._broadcast_champion_locked(True)
             except Exception as e:
                 log.debug(f"[lock:champ] Failed to broadcast champion lock state: {e}")
+
