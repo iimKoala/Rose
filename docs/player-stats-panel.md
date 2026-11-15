@@ -73,6 +73,10 @@ card has a gold edge. The panel is 1016 x 468 at the top of the screen.
   texts. It reads the saved file again when it changes, so deeplol's part appears without a key press.
 - Tests (scratch, no window, no network): the lookup with a fake client and a fake deeplol; the panel's keys,
   texts and drawing.
+- The panel is fully solid (Nov 14). Its window is "layered" so that clicks pass through it, and Windows
+  draws a layered window only after `SetLayeredWindowAttributes`. Tk made that call itself while the panel
+  had an `-alpha`; when the `-alpha` was removed the panel stopped appearing, in two games, until the call
+  was added by hand. `test/test_stats_panel.py` guards it (the window is made, never shown).
 
 ## Not checked, and risks
 

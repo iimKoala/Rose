@@ -36,6 +36,7 @@ APEX = ("MASTER", "GRANDMASTER", "CHALLENGER")  # no divisions, and a full LP ba
 SMALL_SAMPLE = 5  # a win rate over fewer games than this keeps the plain colour: it says little
 ASSETS = Path(__file__).resolve().parent / "account_web"  # the account switcher's emblems and font
 FR_PRIVATE = 0x10
+LWA_ALPHA = 0x2
 
 
 class Hotkey:
@@ -151,7 +152,7 @@ class StatsPanel:
         self.family, self.emblems = title_font(), {}
         self.top = tk.Toplevel(root)
         self.top.overrideredirect(True)
-        self.top.attributes("-topmost", True)  # fully solid: over a bright, moving game a see-through panel is hard to read
+        self.top.attributes("-topmost", True)
         self.height = HEAD + 5 * ROW + 4 * GAP + 2 * PAD
         self.canvas = tk.Canvas(self.top, width=WIDTH, height=self.height, bg=DARK, highlightthickness=1, highlightbackground=EDGE)
         self.canvas.pack()
@@ -163,6 +164,9 @@ class StatsPanel:
         window = user32.GetParent(self.top.winfo_id())
         user32.SetWindowLongW(window, GWL_EXSTYLE, user32.GetWindowLongW(window, GWL_EXSTYLE)
                               | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
+        # Windows draws a layered window only once it has been told how solid it is (Nov 14: without this
+        # line the panel never appeared). 255: fully solid, a see-through panel is hard to read over a game
+        user32.SetLayeredWindowAttributes(window, 0, 255, LWA_ALPHA)
 
     def _keys_down(self) -> bool:
         user32 = ctypes.windll.user32
