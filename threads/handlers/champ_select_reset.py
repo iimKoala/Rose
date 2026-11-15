@@ -51,6 +51,7 @@ def perform_champ_select_reset(state, lcu) -> bool:
     state.historic_skin_id = None
     state.historic_first_detection_done = False
     state.selected_custom_mod = None
+    state.other_skins = {}  # the skins picked for other players' champions: for one champ select
     state.champion_exchange_triggered = False
     state.reset_skin_notification = True
 

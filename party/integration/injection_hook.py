@@ -68,8 +68,11 @@ class PartyInjectionHook:
 
         all_skins = self.party_manager.get_party_skins()
 
-        # Filter out our own skin (we handle that separately)
-        peer_skins = [s for s in all_skins if not s.is_local]
+        # Filter out our own skin (we handle that separately), and a friend whose
+        # champion the user picked a skin for (injection/core/other_skins.py)
+        from injection.core import other_skins
+        picked = other_skins.champions(self.state)
+        peer_skins = [s for s in all_skins if not s.is_local and s.champion_id not in picked]
 
         if peer_skins:
             log.info(

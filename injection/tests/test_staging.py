@@ -989,6 +989,27 @@ class StagingPlanTests(unittest.TestCase):
 
         self.assertEqual(plan, StagePlan(PARTY_SKINS_LABEL, (friend,)))
 
+    def test_a_skin_picked_for_another_player_is_staged_after_the_skin(self):
+        from injection.core import other_skins
+        other_skins.choose(self.state, 2, "Ahri", other_skins.SKIN, skin_id=2005)
+        other_skins.choose(self.state, 1, "Leona", other_skins.DEFAULT)  # the user's own champion: never planned
+
+        plan = self.trigger.staging_plan("skin_1001", "Leona")
+
+        picked = stage_plan_module.OtherSkinStep(2, "Ahri", "skin", 2005)
+        self.assertEqual(plan, skin_plan("skin_1001", "Leona", 1, False, (picked,)))
+
+    def test_a_skin_picked_for_another_player_is_staged_alone_on_the_default_skin(self):
+        from injection.core import other_skins
+        self.state.last_hovered_skin_id = 1000
+        self.assertFalse(self.trigger._has_party_skins())
+        other_skins.choose(self.state, 2, "Ahri", other_skins.DEFAULT)
+
+        plan = self.trigger.staging_plan("skin_1000", "Leona")
+
+        self.assertEqual(plan, StagePlan(PARTY_SKINS_LABEL, (stage_plan_module.OtherSkinStep(2, "Ahri", "default"),)))
+        self.assertTrue(self.trigger._has_party_skins())  # the injection goes on without a skin of the user's own
+
     def test_the_injection_of_saved_mods_selects_what_was_staged(self):
         path = self.save_map()
         self.trigger.injection_manager.injector.mods_dir = self.mods_root / "injection" / "mods"

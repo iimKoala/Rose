@@ -551,6 +551,13 @@ class InjectionManager:
                             extra_mods_callback = lambda inj: party_hook.prepare_party_mods(inj)
                     except Exception as e:
                         log.debug(f"[INJECT] Party injection hook not used: {e}")
+                # The skins the user picked for other players' champions, after friends' skins
+                from . import other_skins
+                if other_skins.planned(self.shared_state):
+                    friends = extra_mods_callback
+                    extra_mods_callback = lambda inj: (
+                        (friends(inj) if friends else []) + other_skins.prepare_all(inj, self.shared_state)
+                    )
 
             success = inject(extra_mods_callback)
             if success:

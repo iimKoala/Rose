@@ -208,6 +208,21 @@ install from GitHub updates itself on start. With two PCs on this version, both 
    before it applies the skins. Tell me if the game opens without the skin: the wait may be too short.
 4. Received files are in `%LOCALAPPDATA%\Rose\mods\party-received`. They show in no mod list.
 
+## 16. Other players' skins: a drop-down per champion (new, Nov 14; never seen in the client or in a game)
+
+Restart Rose so the League client loads the new ROSE-OtherSkins plugin. **Try it in a custom game first, not
+in ranked:** if the patcher's check inside the game objects, it switches every mod off for that game.
+1. Champ select: a panel "Other players' skins" sits against the right edge, one row per other player's
+   champion. Drag it by its title; the – folds it.
+2. Open a row's list: Their own skin, No skin (default look), the skins Rose has, then your custom skins of
+   that champion. Pick one: the row shows its name.
+3. In the game, that champion shows the pick, whatever skin the player has on. Check one player with a skin
+   of their own on and one without. Also check your own skin still shows.
+4. Pick "No skin" for someone who has a skin on: they show the default look.
+5. The Rose log says, per pick: `[OTHERS] Champion <id> will show <skin> (<N> skin slots)`.
+6. Tell me what the game did if a pick did not show: the champion looked as before, looked broken, or every
+   mod was off. LTK Manager's log and incidents folder say why.
+
 If anything goes wrong: tray > Open Logs folder. The account window's log is `account_window_*.log`;
 the store's is `mod_store_*.log` (never contains the signed download links). LTK Manager's crash reports are in
 `%APPDATA%\dev.leaguetoolkit.manager\incidents`.

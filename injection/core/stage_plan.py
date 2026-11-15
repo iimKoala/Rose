@@ -65,6 +65,16 @@ class PartyStep:
     classic: bool
 
 
+@dataclass(frozen=True)
+class OtherSkinStep:
+    """The skin the user picked for another player's champion (injection.core.other_skins.prepare)."""
+    champion_id: int
+    stem: str           # the champion's WAD name: "Ahri", "MonkeyKing"
+    kind: str           # other_skins.DEFAULT, SKIN or CUSTOM
+    skin_id: int = 0    # SKIN: the skin's or the chroma's id
+    mod_path: str = ""  # CUSTOM: the saved skin, relative to the mods folder
+
+
 class StagePlan(NamedTuple):
     """The mods an injection installs, in its order.
 
@@ -86,10 +96,13 @@ def describe(plan: StagePlan) -> str:
     extras = []
     mods = sum(1 for step in plan.steps if isinstance(step, ModStep))
     friends = sum(1 for step in plan.steps if isinstance(step, PartyStep))
+    others = sum(1 for step in plan.steps if isinstance(step, OtherSkinStep))
     if mods:
         extras.append(f"{mods} mod{'s' if mods > 1 else ''}")
     if friends and plan.label != PARTY_SKINS_LABEL:
         extras.append(f"{friends} friend skin{'s' if friends > 1 else ''}")
+    if others:
+        extras.append(f"{others} skin{'s' if others > 1 else ''} picked for other players")
     return f" + {' + '.join(extras)}" if extras else ""
 
 
@@ -142,6 +155,8 @@ def prepare_plan(injector, plan: StagePlan, target_dir: Path) -> Optional[List[s
             folder = _prepare_party_skin(injector, step, target_dir)
             if folder:
                 names.append(folder)
+        elif isinstance(step, OtherSkinStep):
+            names.extend(_prepare_other_skin(injector, step, target_dir))
     return names or None
 
 
@@ -173,6 +188,16 @@ def _prepare_carrier(injector, step: CarrierStep, target_dir: Path) -> Optional[
     if not folder or not (folder.exists() or is_junction(folder)):
         return None
     return folder.name
+
+
+def _prepare_other_skin(injector, step: OtherSkinStep, target_dir: Path) -> List[str]:
+    from . import other_skins  # here: other_skins imports this module's OtherSkinStep
+
+    try:
+        return other_skins.prepare(injector, step, target_dir)
+    except Exception as e:
+        log.debug(f"[STAGE] Could not prepare the skin picked for champion {step.champion_id}: {e}")
+        return []
 
 
 def _prepare_party_skin(injector, step: PartyStep, target_dir: Path) -> Optional[str]:

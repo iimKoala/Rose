@@ -1,0 +1,8 @@
+{
+  "name": "ROSE-OtherSkins",
+  "version": "1.0.0",
+  "description": "Champ select: pick the skin another player's champion shows on your screen",
+  "author": "Rose Team",
+  "main": "index.js",
+  "enabled": true
+}

@@ -120,6 +120,10 @@ class SharedState:
     
     selected_custom_mod: Optional[SelectedCustomMod] = None
 
+    # The skins the user picked for other players' champions, for one champ select:
+    # {champion id: OtherSkinStep} (injection/core/other_skins.py)
+    other_skins: dict = field(default_factory=dict)
+
     # Party mode - P2P skin sharing with friends
     party_mode_enabled: bool = False
     party_token: Optional[str] = None  # Our party token for sharing

@@ -563,8 +563,16 @@ class InjectionTrigger:
         return mods + other_mods
 
     def planned_party_skins(self) -> tuple:
-        """Friends' skins the injection adds (PartyInjectionHook.prepare_party_mods),
-        as stage_plan steps: () without party mode or friends."""
+        """What the injection adds for other players, as stage_plan steps:
+        friends' skins (PartyInjectionHook.prepare_party_mods), then the skins
+        the user picked for other players' champions
+        (injection.core.other_skins), which stand in for a friend's own."""
+        from injection.core import other_skins
+        others = other_skins.planned(self.state)
+        return self._planned_friend_skins({step.champion_id for step in others}) + others
+
+    def _planned_friend_skins(self, picked_champions: set) -> tuple:
+        """Friends' skins, but for *picked_champions*: () without party mode or friends."""
         party_manager = getattr(self.state, "party_manager", None)
         if not party_manager or not getattr(party_manager, "enabled", False):
             return ()
@@ -583,7 +591,7 @@ class InjectionTrigger:
                 classic=classic,
             )
             for skin in party_manager.get_party_skins()
-            if not skin.is_local
+            if not skin.is_local and skin.champion_id not in picked_champions
         )
 
     @staticmethod
@@ -1243,7 +1251,11 @@ class InjectionTrigger:
             log.error(f"[INJECT] injection error: {e}")
 
     def _has_party_skins(self) -> bool:
-        """Check if party mode has friends' skins to inject for this game"""
+        """Check if there are skins to inject besides our own: friends' (party
+        mode), or the ones the user picked for other players' champions"""
+        from injection.core import other_skins
+        if other_skins.planned(self.state):
+            return True
         party_manager = getattr(self.state, "party_manager", None)
         if not party_manager or not getattr(party_manager, "enabled", False):
             return False
@@ -1689,6 +1701,16 @@ class InjectionTrigger:
                             log.info(f"[INJECT] Including {len(party_mod_names)} party/extra mod(s): {'/'.join(party_mod_names)}")
                 except Exception as e:
                     log.debug(f"[INJECT] Party injection hook not used: {e}")
+
+            # The skins the user picked for other players' champions
+            try:
+                from injection.core import other_skins
+                picked_mod_names = other_skins.prepare_all(injector, self.state)
+                if picked_mod_names:
+                    mod_folder_names.extend(picked_mod_names)
+                    log.info(f"[INJECT] Including {len(picked_mod_names)} mod(s) for other players' champions: {'/'.join(picked_mod_names)}")
+            except Exception as e:
+                log.debug(f"[INJECT] Other players' skins not used: {e}")
 
             # Check if we have any mods to inject
             if not mod_folder_names:

@@ -278,9 +278,10 @@ class Bin:
         if magic != b"PROP":
             raise PropError("not a PROP file")
         self.version = reader.u32()
+        self.linked: List[str] = []  # the files this one links
         if self.version >= 2:
-            for _ in range(reader.u32()):  # linked files
-                reader.take(reader.u16())
+            for _ in range(reader.u32()):
+                self.linked.append(reader.take(reader.u16()).decode("utf-8", "replace"))
         count = reader.u32()
         self._types: List[int] = list(struct.unpack_from(f"<{count}I", reader.take(4 * count)))
         self._head_end = reader.pos
