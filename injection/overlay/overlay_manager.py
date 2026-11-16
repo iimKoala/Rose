@@ -25,7 +25,7 @@ from injection.game.reconnect import kill_game, reconnect_to_game
 from utils.core.logging import get_logger, log_event
 from utils.core.issue_reporter import report_issue
 from ..tools.bridge import BridgeCommandError, BridgeUnavailable
-from ..tools import mod_checker
+from ..tools import int_widths, mod_checker
 from ..mods.fantome import fantome_display_name, write_fantome_zip
 from ..mods.fingerprint import mod_fingerprint
 from ..mods.ltk_ref import split_mod_names
@@ -176,6 +176,9 @@ def _ltk_log_time(stamp: str) -> Optional[float]:
     return moment.timestamp() + (float(f"0.{fraction}") if fraction.isdigit() else 0.0)
 
 
+_PROPERTY_TYPE = "bin/property-type"  # LTK Manager's rule: a property at a type the game no longer reads
+
+
 def _verdict_summary(verdict: dict) -> str:
     counts = verdict.get("counts") or {}
     return ", ".join(f"{counts.get(key, 0)} {key}" for key in ("fatals", "errors", "warnings")) + \
@@ -247,8 +250,10 @@ class OverlayManager(ReconnectChoiceMixin):
         With repair=False it only checks (the Mod store's Installed list).
 
         None when it did not run (the checker is missing or failed). Otherwise
-        {"health": LTK's word before any repair, "repaired": fixes applied,
-        "fixable": problems left that LTK Manager can repair, "problems":
+        {"health": LTK's word before any repair (after Rose's own repair of
+        numbers stored too wide, int_widths: its word on the repaired mod),
+        "repaired": fixes applied, "fixable": problems left that a repair
+        fixes (LTK Manager's, and those numbers), "problems":
         [{"rule", "title", "description"}] the game still rejects and LTK
         Manager cannot repair}.
         """
@@ -283,13 +288,32 @@ class OverlayManager(ReconnectChoiceMixin):
             else:
                 log.info(f"[MODCHECK] {display_name} is stored as a folder: its problems are not repaired")
         problems = mod_checker.rejected(verdict)
-        if not problems and int(verdict.get("fixable") or 0) > 0:
-            log.warning(f"[MODCHECK] {display_name} still has {verdict.get('fixable')} problem(s) LTK Manager can repair")
+        fixable = int(verdict.get("fixable") or 0)
+        # A number stored wider than the game reads: LTK Manager's rules name it and never repair it, Rose
+        # does when the number fits (int_widths). Only a stored archive, as with LTK Manager's own repair.
+        if staging is None and any(problem["rule"] == _PROPERTY_TYPE for problem in problems):
+            if repair:
+                narrowed = int_widths.repair_archive(folder)
+                after = mod_checker.check_mod_file(folder, self.game_dir) if narrowed else None
+                if after is not None:
+                    repaired += narrowed
+                    verdict, health, problems = after, str(after.get("health") or health), mod_checker.rejected(after)
+                    fixable = int(verdict.get("fixable") or 0)
+                    log.info(f"[MODCHECK] Stored {narrowed} number(s) of {display_name} as the game reads them "
+                             f"({_verdict_summary(verdict)} left)")
+            else:
+                left = sum(int(rule.get("count") or 0) - int(rule.get("fixable") or 0)
+                           for rule in verdict.get("rules") or [] if rule.get("rule") == _PROPERTY_TYPE)
+                narrowable = int_widths.narrowable(folder)
+                if narrowable >= left:  # every one LTK Manager leaves is such a number: a repair, not a reject
+                    problems = [problem for problem in problems if problem["rule"] != _PROPERTY_TYPE]
+                    fixable += narrowable
+        if not problems and fixable > 0:
+            log.warning(f"[MODCHECK] {display_name} still has {fixable} problem(s) a repair fixes")
         for problem in problems:
             log.warning(f"[MODCHECK] {display_name} will not work in game: {problem['title']} - "
                         f"{problem['description']}")
-        result = {"health": health, "repaired": repaired, "fixable": int(verdict.get("fixable") or 0),
-                  "problems": problems}
+        result = {"health": health, "repaired": repaired, "fixable": fixable, "problems": problems}
         flaws = mod_checker.warnings(verdict)
         if flaws:
             result["warnings"] = flaws  # only when there are some: the mod plays, with something missing

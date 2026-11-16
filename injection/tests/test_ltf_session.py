@@ -2819,5 +2819,65 @@ class ModCheckTests(LtfSessionTestCase):
         self.assertIsNone(self.overlay.check_mod(self.folder, "Eternal Aspect Leona"))
         self.assertEqual(FakeBridge.created, [])
 
+    # -- numbers stored wider than the game reads: LTK Manager's rules name them, Rose repairs them (int_widths) --
+
+    TOO_WIDE = {"rule": "bin/property-type", "title": "Meta property type mismatch",
+                "description": "", "severity": "fatal", "count": 55, "fixable": 0}
+    STILL_REJECTED = [{"rule": "bin/property-type", "title": "Meta property type mismatch", "description": ""}]
+
+    def stored_zeri(self) -> Path:
+        """Nov 16, Travis Scott Zeri: 55 fatal type mismatches LTK Manager never repairs (u32 where the game reads u8)"""
+        stored = self.root / "mods" / "skins" / "221000" / "Travis Scott Zeri.fantome"
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(b"PK")
+        self.verdict = {"health": "unrepairable", "fixable": 0, "counts": {"fatals": 55}, "rules": [self.TOO_WIDE]}
+        return stored
+
+    def test_numbers_stored_wider_than_the_game_reads_are_narrowed_by_rose(self):
+        stored = self.stored_zeri()
+
+        def narrow(archive):
+            self.verdict = {"health": "healthy", "fixable": 0, "counts": {}, "rules": []}  # LTK's rules on the repaired mod
+            return 55
+
+        with patch.object(overlay_manager.int_widths, "repair_archive", side_effect=narrow) as narrowed:
+            result = self.overlay.check_mod(stored, "Travis Scott Zeri")
+
+        self.assertEqual(result, {"health": "healthy", "repaired": 55, "fixable": 0, "problems": []})
+        narrowed.assert_called_once_with(stored)
+        self.assertEqual(len(self.checked), 2, "LTK Manager's rules have the last word on the repaired mod")
+
+    def test_a_check_without_repair_counts_those_numbers_as_repairable(self):
+        """The Mod store's Installed list then offers Fix, where it said "Can't be played\""""
+        stored = self.stored_zeri()
+
+        with patch.object(overlay_manager.int_widths, "narrowable", return_value=55), \
+                patch.object(overlay_manager.int_widths, "repair_archive") as narrowed:
+            result = self.overlay.check_mod(stored, "Travis Scott Zeri", repair=False)
+
+        self.assertEqual(result, {"health": "unrepairable", "repaired": 0, "fixable": 55, "problems": []})
+        narrowed.assert_not_called()
+
+    def test_a_mismatch_that_is_no_such_number_stays_a_reject(self):
+        stored = self.stored_zeri()
+
+        with patch.object(overlay_manager.int_widths, "narrowable", return_value=54):  # one of the 55 is something else
+            listed = self.overlay.check_mod(stored, "Travis Scott Zeri", repair=False)
+        with patch.object(overlay_manager.int_widths, "repair_archive", return_value=0):
+            repaired = self.overlay.check_mod(stored, "Travis Scott Zeri")
+
+        unrepaired = {"health": "unrepairable", "repaired": 0, "fixable": 0, "problems": self.STILL_REJECTED}
+        self.assertEqual((listed, repaired), (unrepaired, unrepaired))
+        self.assertEqual(len(self.checked), 2, "no second check when Rose repaired nothing")
+
+    def test_a_mod_stored_as_a_folder_is_not_narrowed(self):
+        self.verdict = {"health": "unrepairable", "fixable": 0, "counts": {"fatals": 55}, "rules": [self.TOO_WIDE]}
+
+        with patch.object(overlay_manager.int_widths, "repair_archive") as narrowed:
+            result = self.overlay.check_mod(self.folder, "Eternal Aspect Leona")
+
+        self.assertEqual(result["problems"], self.STILL_REJECTED)
+        narrowed.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()

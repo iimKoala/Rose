@@ -8,6 +8,7 @@ LTK Manager's own mod check and repair as a separate program. Rose runs it on a 
 - License: GPL-3.0-or-later, like the code it calls and includes (see `LICENSE`). Rose itself stays MIT: it only runs this program and reads what it prints.
 - Name tables: LTK Manager's cache in `%LOCALAPPDATA%\LeagueToolkit\hashes`, opened read-only. Nothing is downloaded.
 - `Cargo.lock` is LTK Manager's from v1.33.0, so every library is the version LTK Manager was built with.
+- One flaw these rules name and never repair, a number stored wider than the game reads (`bin/property-type`, for example `StaticMaterialDef.type` as 32 bits where the game reads 8 since patch 16.18), is repaired by Rose itself when the number fits: `injection/tools/int_widths.py`, Rose's own code. The rules then check the repaired mod again and have the last word.
 
 Build (from Rose's folder):
 
