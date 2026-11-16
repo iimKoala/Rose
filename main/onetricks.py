@@ -95,6 +95,16 @@ def top_players(ranking: dict, lane: str = "", count: int = 3) -> list:
     return found
 
 
+def by_lane(players: list, shares: dict, lane: str = "") -> list:
+    """*players* (as top_players gives them, best first) in the order their builds are wanted for *lane*:
+    those who mostly play the champion there, then those of the champion's own main lane (the one it is
+    played in most, *shares* from lane_shares), then the rest. So with no lane given, or nobody in it, the
+    main lane's players come first. Each group keeps the ranking's order."""
+    main = max(LANES, key=lambda one: shares.get(one, 0)) if any(shares.get(one, 0) for one in LANES) else ""
+    wanted = [lane, main] if lane in LANES else [main]
+    return sorted(players, key=lambda player: wanted.index(player["lane"]) if player["lane"] in wanted else len(wanted))
+
+
 def champion_key(ranking: dict, champion_id: int) -> str:
     """The site's spelling of a champion's name (any ranking page lists them all); "" if unknown"""
     return str((ranking.get("championKeys") or {}).get(str(champion_id)) or "")

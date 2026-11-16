@@ -31,7 +31,11 @@ Lookup tables on the same page: `runes`, `itemData`, `summonerSpells`, `champion
 ## Design
 
 1. **Who.** Top 3 of the ranking list. When League gives an assigned lane, only players who mostly play that
-   lane count (Talon's #1 is a jungler: his runes and Smite are wrong for mid).
+   lane count (Talon's #1 is a jungler: his runes and Smite are wrong for mid). Since Nov 16 (the user: "the
+   build should find the top players for that specific lane on that champion. defaults to main lane if there
+   are no players for that lane"): when that lane has fewer than three such players, or no lane is known, the
+   list goes on with the best players of the champion's own main lane (the lane it is played in most), and
+   only then with the rest (`onetricks.by_lane`). Before, it went on with the next players of any lane.
 2. **What is shown.** A small panel in champ select: player name, rank and region, keystone and runes, spells,
    start items, core items, skill order, and arrows to switch between the 3. Nothing is imported until the
    user presses the panel's **Import** button (the user after the first live test, Nov 11: "it shouldn't just

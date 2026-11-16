@@ -67,10 +67,10 @@ def _others(puuid: str, champion_id: int) -> list:
 
 
 def _candidates(champion: str, lane: str) -> list:
-    """A champion's players in the order Rose tries them: the best who mostly play *lane*, then the rest"""
-    everyone = _ranking(champion)[0]
-    ordered = [player for player in everyone if not lane or player["lane"] == lane]
-    return ordered + [player for player in everyone if player not in ordered]
+    """A champion's players in the order Rose tries them: the best who mostly play *lane*, then the best of
+    the champion's main lane, then the rest (onetricks.by_lane)"""
+    everyone, shares = _ranking(champion)
+    return onetricks.by_lane(everyone, shares, lane)
 
 
 def _players(champion: str, lane: str, champion_id: int) -> list:
