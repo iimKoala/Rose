@@ -68,7 +68,6 @@ Several of these are days old. Each one's design note ends with what was checked
 | 📋 | **Builds** | In champ select, the builds of the champion's three best one-trick players on onetricks.gg: runes, summoner spells and items, imported in one press. Once the enemy locks in, a build against your likely lane opponent. | [design](../docs/champ-select-builds.md) |
 | 🎭 | **Other players' skins** | Pick the skin each other player's champion shows on your screen: a Riot skin, one of your custom skins, or none. *New: not yet proven in a real game.* | [design](../docs/other-players-skins.md) |
 | 🤝 | **Party skin sharing** | In the original, a friend's custom skin shows only if you have the same file. Here the file is sent, so it appears by itself. | [design](../docs/party-mod-sharing.md) |
-| 🗺️ | **Custom maps on the seasonal map** | When Riot swaps Summoner's Rift for a seasonal look (the winter map since patch 16.23), your selected custom map still shows: Rose points the seasonal map back at the standard one for that game. *New: not yet proven in a real game.* | [design](../docs/custom-map-on-seasonal-map.md) |
 | 🔌 | **Reconnect choice** | After a crash, choose which mods to turn off before you reconnect, in place of all of them. | [design](../docs/reconnect-mod-choice.md) |
 
 ### In the game

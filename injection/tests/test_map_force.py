@@ -8,6 +8,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from injection.baseskin.propbin import Entry, Field, Value, build, fnv1a_lower
 from injection.baseskin.wad import ModWad, path_hash
@@ -16,6 +17,7 @@ from injection.core.stage_plan import MapForceStep, ModStep, StagePlan, prepare_
 from injection.mods.mod_source import RoseFile
 
 H = fnv1a_lower
+SHIPPED_ENABLED = map_force.ENABLED  # read before any test switches it on
 BASE = "Maps/MapGeometry/Map11/Base_SRX"
 WINTER = "Maps/MapGeometry/Map11/Milkshake_SRS"
 SRX = ("ASSETS/Maps/CFG/objectcfg_SRX.cfg", "ASSETS/Maps/NavGrid/AIPath_SRX.aimesh_ngrid")
@@ -129,6 +131,9 @@ class PrepareTests(ModTestCase):
         self.mods = self.root / "mods"
         self.mods.mkdir()
         self.injector = SimpleNamespace(game_dir=game, mods_dir=self.mods)
+        switched_on = patch.object(map_force, "ENABLED", True)  # off since Nov 19: these test what it does when on
+        switched_on.start()
+        self.addCleanup(switched_on.stop)
         self.plain = RoseFile(self.mod("Hexed Rift.fantome", {"META/info.json": '{"Name": "Hexed Rift"}',
                                                               "WAD/Map11.wad.client": wad_bytes({"assets/grass.tex": b"tex"})}), "Hexed Rift")
 
@@ -142,6 +147,13 @@ class PrepareTests(ModTestCase):
         self.assertEqual(module["origin"], {"manifest": "game_data.yaml", "source": None, "module": 0})
         edits, = module["edits"]
         return edits
+
+    def test_it_is_switched_off(self):
+        """Nov 19: with the winter skin linked to the standard map the game quit as it spawned the world"""
+        with patch.object(map_force, "ENABLED", False):
+            self.assertIsNone(map_force.prepare(self.injector, self.plain))
+        self.assertFalse((self.mods / "rose_map_force").exists())
+        self.assertFalse(SHIPPED_ENABLED, "as shipped")
 
     def test_a_plain_custom_map_gets_the_winter_skin_linked_to_the_standard_map(self):
         self.assertEqual(map_force.prepare(self.injector, self.plain), "rose_map_force")

@@ -24,6 +24,15 @@ skins are read from that file.
 
 Not re-linked in this version: what else the winter skin changes (the grass tint, the
 winter looks of minions, towers and monsters).
+
+SWITCHED OFF (ENABLED, Nov 19, 2026). With the winter skin linked to the standard map the
+game loaded and then quit the moment it spawned the world, in every game. A map container
+is more than a look: it holds the map's placed objects, and the winter container has some
+the standard one lacks (a train with its path, the shops under other names). The server
+runs a winter game and names them; a client that loaded the standard container does not
+have them. "The same objects file and navigation grid" was the wrong test for "the same
+playfield". docs/custom-map-on-seasonal-map.md has what was found and what a working way
+would need.
 """
 
 import json
@@ -40,6 +49,9 @@ from utils.core.logging import get_logger
 
 log = get_logger()
 
+# Off: see the note at the end of the module's description. Nothing below is wrong as code (LTK Manager
+# accepts and applies the edit); what is wrong is linking the winter skin to the standard container at all.
+ENABLED = False
 FOLDER = "rose_map_force"
 MAP_WAD = Path("DATA") / "FINAL" / "Maps" / "Shipping" / "Map11.wad.client"
 MAP_BIN = "data/maps/shipping/map11/map11.bin"
@@ -205,6 +217,8 @@ def prepare(injector, source, mods_dir: Optional[Path] = None) -> Optional[str]:
     """Write the forcer for the selected map mod *source* into *mods_dir* (the injector's by default) and
     return its folder name. None when there is nothing to re-link, or anything fails: the map mod is
     injected either way, as before."""
+    if not ENABLED:
+        return None
     mods_dir = Path(mods_dir) if mods_dir is not None else injector.mods_dir
     try:
         archive = mod_archive(source)

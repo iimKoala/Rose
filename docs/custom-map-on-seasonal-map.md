@@ -1,7 +1,42 @@
-# A custom map on the season's map (built Nov 18, fixed Nov 19; the fix not yet seen in a game)
+# A custom map on the season's map (built Nov 18; SWITCHED OFF Nov 19: it made the game quit)
 
 Asked for on Nov 18: "latest league patch put winter map, can you look into custom maps overriding it?" and
 "they made the winter map the official standard map, i still want to use custom".
+
+## Nov 19: switched off, and why this way cannot work for the winter map
+
+With the edit accepted by LTK Manager (below), the user's games loaded and then quit the moment they spawned
+the world: "map forcer is just crashing the game now". The game's log ends with
+
+    Switching Game State from GAMESTATE_PREGAME to GAMESTATE_SPAWN for reason Received StartSpawn packet.
+    ERROR| SentryHandleException
+
+Rose's reconnect then left the forcer out, and the same game ran, on the winter map.
+
+LTK Manager's rewrite of `map11.bin` is not the cause: only the 11 edited entries differ from the game's file.
+The cause is the idea itself. A map container (the object a map skin links, kept in the variant's
+`<variant>.materials.bin`) is more than a look. It holds the map's placed objects in named chunks, and the
+winter container differs from the standard one in them:
+
+- a chunk with a **train** (`Characters/SRU_Train`, with the points it moves along), which the standard map
+  does not have;
+- the **shops** under other names (`OrderShopAreaLimits1` where the standard map has `OrderShopAreaLimits`),
+  with the winter shopkeepers;
+- the winter decorations; 6 chunk names only winter has, 2 only the standard map has, and 15 that point at
+  other objects.
+
+The server runs a winter game and names those objects. A client that loaded the standard container does not
+have them. So "the same objects file and the same navigation grid" was the wrong test for "the same
+playfield", and no edit of the map skin alone can put the standard map under a winter game.
+
+`map_force.ENABLED` is False: nothing is added, a custom map selected during the winter season shows the
+winter map as before the forcer, and the game runs.
+
+What a working way would need (not built): keep the winter container with its placed objects, and replace
+only what is drawn. That means a `milkshake_srs.mapgeo` made from the standard map's geometry and a
+`milkshake_srs.materials.bin` that keeps winter's container and chunks while defining the standard map's
+materials, per custom map. That is what map authors do by hand when they port a map to a season, and each
+step needs trying in a game.
 
 ## What happened
 
@@ -66,7 +101,7 @@ skins link `Base_SRX`, with all 1,590 entries still there and the 15 other skins
 
 To see what LTK Manager made of a mod's declarations after a game: search its log for `Game data:`.
 
-## Not done, not checked
+## Not done, not checked (as of the switched-off state)
 
 - **The fixed version has not been seen in a game.** Checked: the logic on the real game files and on the
   user's 12 map mods (7 get the forcer, 5 rightly get none), and the made mod with LTK Manager's own library
