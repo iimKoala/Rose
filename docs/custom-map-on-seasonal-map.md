@@ -1,4 +1,4 @@
-# A custom map under the season's map (an experiment: off, a Practice Tool trial on the developer's PC)
+# A custom map under the season's map (an experiment: off; seen working once, in the Practice Tool)
 
 Asked for on Nov 18: "latest league patch put winter map, can you look into custom maps overriding it?" and
 "they made the winter map the official standard map, i still want to use custom". After the first try made
@@ -77,6 +77,19 @@ every game). `.git` is never published and an installed copy has none, so it is 
 - No name that only the winter geometry has is spelled out, or hashed, in winter's placed objects.
 - LTK Manager's rules call the packed mod healthy (they read its bin; they do not read the geometry).
 
-**Not checked, and only a game can: whether the game loads it, and what it then shows.**
+**Not checked offline, and only a game can: whether the game loads it, and what it then shows.**
+
+### Seen in a game (Nov 19, 02:12)
+
+The user's Practice Tool game with Hell Rift selected, mode `practice`: "Custom map shows".
+
+- Rose: `[MAP] A custom map is selected and the game runs Milkshake_SRS: the standard map is drawn under it
+  (28 material(s) added to the season's; mode practice)`, staged and injected, overlay built in 3.6 s.
+- The game ran 19 seconds and was closed by the user. Its log has no error line, and LTK Manager recorded
+  "Game ended clean, no incident".
+
+What that shows: the game loads the port and spawns the world, which is where the first way died. What it
+does not show: a whole game (minions from 0:30 on, the shop, the drakes changing the terrain, the train
+moving, other players), and the five other maps that get the port.
 
 Tests: `injection/tests/test_map_force.py`, three cases in `injection/tests/test_staging.py`.
