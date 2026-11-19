@@ -136,6 +136,10 @@ class PrepareTests(ModTestCase):
         info = json.loads((self.mods / map_force.FOLDER / "META" / "info.json").read_text(encoding="utf-8"))
         module, = info["Layers"]["base"]["GameData"]["modules"]
         self.assertEqual((info["Layers"]["base"]["GameData"]["version"], module["target"]), (1, "data/maps/shipping/map11/map11.bin"))
+        # The module's keys are the community Map Forcer's, all of them. Nov 19: without "origin" LTK Manager
+        # refused the declarations ("missing field `origin`") and the winter map stayed, in every game
+        self.assertEqual(sorted(module), ["edits", "origin", "target"])
+        self.assertEqual(module["origin"], {"manifest": "game_data.yaml", "source": None, "module": 0})
         edits, = module["edits"]
         return edits
 

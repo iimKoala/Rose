@@ -158,8 +158,12 @@ def write_mod(target: Path, links: Dict[str, str]) -> None:
         "Description": "Made by Rose for this game: a custom map shows on the map skins " + ", ".join(sorted(links)),
         "Name": "Rose map forcer",
         "Version": "1.0.0",
-        "Layers": {"base": {"Name": "base", "Priority": 0, "GameData": {
-            "version": 1, "modules": [{"target": MAP_BIN, "edits": [edits]}]}}},
+        "Layers": {"base": {"Name": "base", "Priority": 0, "GameData": {"version": 1, "modules": [{
+            "target": MAP_BIN, "edits": [edits],
+            # Where the module was declared, as LTK Manager's own tools write it. Required: without it LTK
+            # Manager refuses the layer's declarations ("missing field `origin`", Nov 19) and the winter map stays
+            "origin": {"manifest": "game_data.yaml", "source": None, "module": 0},
+        }]}}},
     }
     shutil.rmtree(target, ignore_errors=True)
     (target / "META").mkdir(parents=True)

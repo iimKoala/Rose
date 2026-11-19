@@ -1,4 +1,4 @@
-# A custom map on the season's map (built Nov 18; never run in a real game yet)
+# A custom map on the season's map (built Nov 18, fixed Nov 19; the fix not yet seen in a game)
 
 Asked for on Nov 18: "latest league patch put winter map, can you look into custom maps overriding it?" and
 "they made the winter map the official standard map, i still want to use custom".
@@ -47,12 +47,31 @@ The list is read from the game's own `map11.bin` for each game, so a new season 
 - `InjectionTrigger._custom_mod_plan`: a `MapForceStep` after the map's `ModStep`, so the countdown stages the
   same mods the injection installs (`injection/core/stage_plan.py`).
 
+## Nov 19: the first version did nothing, and why
+
+The user after two games: "still always winter map". Rose's log showed the forcer made, staged and injected.
+LTK Manager's log (`%APPDATA%\dev.leaguetoolkit.manager\logs`) had the reason, once per game:
+
+    WARN ltk_manager_library::overlay: Game data: Layer declarations refused: missing field `origin`
+
+Each module of the declarations needs `"origin": {"manifest": "game_data.yaml", "source": null, "module": 0}`
+(where LTK Manager's own tools read the module from). The community Map Forcer has it; when its form was
+copied on Nov 18 only the module's `target` and `edits` were looked at, and LTK Manager's mod check
+(`rose-mod-check`) does not read declarations, so "healthy" said nothing about them.
+
+Fixed, and this time checked with LTK Manager's own library (`ltk_game_data` 0.12.0, the version LTK Manager
+1.33.0 is built with) in a scratch program: the old form is refused with the same words, the new form is
+accepted, and applied to the game's real `map11.bin` it gives a file in which `Milkshake_SRS` and ten other
+skins link `Base_SRX`, with all 1,590 entries still there and the 15 other skins untouched.
+
+To see what LTK Manager made of a mod's declarations after a game: search its log for `Game data:`.
+
 ## Not done, not checked
 
-- **Never seen in a game.** Checked: the logic on the real game files and on the user's 12 map mods (7 get the
-  forcer, 5 rightly get none), the made mod against the community Map Forcer's form, and LTK Manager's own
-  rules on it ("healthy"). Not checked: that LTK Manager applies the edit in a game started through Rose, and
-  what the game shows.
+- **The fixed version has not been seen in a game.** Checked: the logic on the real game files and on the
+  user's 12 map mods (7 get the forcer, 5 rightly get none), and the made mod with LTK Manager's own library
+  (above). Not checked: LTK Manager's overlay builder with it in a game started through Rose, and what the
+  game shows.
 - The winter skin changes more than the map: the grass tint, and winter looks for minions, towers and
   monsters. Those stay. Resetting them needs properties whose names are not known.
 - Only Summoner's Rift (map 11). ARAM and the other maps have their own files.
