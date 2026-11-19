@@ -512,11 +512,12 @@ class InjectionTrigger:
         if custom_mod.get("source") is not None:
             steps.append(ModStep(custom_mod["source"], required=True))
         steps.extend(ModStep(mod["source"]) for mod in other_mods if mod.get("source") is not None)
-        # A custom map: the mod that links the season's map skins to the standard map goes right after it,
-        # as _run_mod_injection adds it (injection.core.map_force)
+        # A custom map: the mod that draws the standard map under the season's goes right after it, as
+        # _run_mod_injection adds it (injection.core.map_force; an experiment, off unless this PC asks for it)
         map_mod = next((mod for mod in other_mods if mod.get("source") is not None and self._is_map_mod(mod)), None)
         if map_mod is not None:
-            steps.insert(steps.index(ModStep(map_mod["source"])) + 1, MapForceStep(map_mod["source"]))
+            steps.insert(steps.index(ModStep(map_mod["source"])) + 1,
+                         MapForceStep(map_mod["source"], self._is_practice_tool()))
         try:
             skin_id = int(custom_mod.get("skin_id"))
         except (TypeError, ValueError):
@@ -525,6 +526,10 @@ class InjectionTrigger:
             steps.append(LoadingNameStep(skin_id))
         steps.extend(party)
         return StagePlan(label, tuple(steps)) if steps else None
+
+    def _is_practice_tool(self) -> bool:
+        """Whether the game being set up is a Practice Tool game (the only kind an experiment is tried in)"""
+        return str(getattr(self.state, "current_game_mode", None) or "").upper() == "PRACTICETOOL"
 
     def _is_map_mod(self, mod: dict) -> bool:
         """Whether *mod* (an entry of _planned_other_mods) is the map mod: the selected one, or a saved
@@ -1636,11 +1641,12 @@ class InjectionTrigger:
                     mod_folder_names.append(map_mod_folder)
                     mod_names_list.append(selected_map_mod.get("mod_name", "Map"))
                     log.info(f"[INJECT] Including map mod: {selected_map_mod.get('mod_name')}")
-                    # A custom map on the season's map: the season's map skins are linked to the standard
-                    # map by a mod made on the spot (injection.core.map_force)
+                    # A custom map under the season's map: the standard map is drawn under it by a mod made
+                    # on the spot (injection.core.map_force; an experiment, off unless this PC asks for it)
                     try:
                         from injection.core import map_force
-                        map_forcer = map_force.prepare(injector, self._current_source(selected_map_mod, mod_storage))
+                        map_forcer = map_force.prepare(injector, self._current_source(selected_map_mod, mod_storage),
+                                                       practice=self._is_practice_tool())
                         if map_forcer:
                             mod_folder_names.append(map_forcer)
                     except Exception as e:

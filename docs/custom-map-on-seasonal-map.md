@@ -1,113 +1,82 @@
-# A custom map on the season's map (built Nov 18; SWITCHED OFF Nov 19: it made the game quit)
+# A custom map under the season's map (an experiment: off, a Practice Tool trial on the developer's PC)
 
 Asked for on Nov 18: "latest league patch put winter map, can you look into custom maps overriding it?" and
-"they made the winter map the official standard map, i still want to use custom".
+"they made the winter map the official standard map, i still want to use custom". After the first try made
+the game quit, on Nov 19: "Yes, try it" (the harder way).
 
-## Nov 19: switched off, and why this way cannot work for the winter map
-
-With the edit accepted by LTK Manager (below), the user's games loaded and then quit the moment they spawned
-the world: "map forcer is just crashing the game now". The game's log ends with
-
-    Switching Game State from GAMESTATE_PREGAME to GAMESTATE_SPAWN for reason Received StartSpawn packet.
-    ERROR| SentryHandleException
-
-Rose's reconnect then left the forcer out, and the same game ran, on the winter map.
-
-LTK Manager's rewrite of `map11.bin` is not the cause: only the 11 edited entries differ from the game's file.
-The cause is the idea itself. A map container (the object a map skin links, kept in the variant's
-`<variant>.materials.bin`) is more than a look. It holds the map's placed objects in named chunks, and the
-winter container differs from the standard one in them:
-
-- a chunk with a **train** (`Characters/SRU_Train`, with the points it moves along), which the standard map
-  does not have;
-- the **shops** under other names (`OrderShopAreaLimits1` where the standard map has `OrderShopAreaLimits`),
-  with the winter shopkeepers;
-- the winter decorations; 6 chunk names only winter has, 2 only the standard map has, and 15 that point at
-  other objects.
-
-The server runs a winter game and names those objects. A client that loaded the standard container does not
-have them. So "the same objects file and the same navigation grid" was the wrong test for "the same
-playfield", and no edit of the map skin alone can put the standard map under a winter game.
-
-`map_force.ENABLED` is False: nothing is added, a custom map selected during the winter season shows the
-winter map as before the forcer, and the game runs.
-
-What a working way would need (not built): keep the winter container with its placed objects, and replace
-only what is drawn. That means a `milkshake_srs.mapgeo` made from the standard map's geometry and a
-`milkshake_srs.materials.bin` that keeps winter's container and chunks while defining the standard map's
-materials, per custom map. That is what map authors do by hand when they port a map to a season, and each
-step needs trying in a game.
-
-## What happened
+## What happened in the game
 
 - The game's `data/maps/shipping/map11/map11.bin` lists 30 **map skins** of Summoner's Rift (`Default`,
   `Milkshake_SRS`, `URF`, `Arcade`...). The server names the one a game loads; the game's log says which:
   `GameStartInfo ... mapskin = Milkshake_SRS`.
 - Each map skin links a **map container** by name (`mMapContainerLink`). `Default` links
   `Maps/MapGeometry/Map11/Base_SRX`, the standard map. `Milkshake_SRS`, Riot's name for the winter map, links
-  its own geometry, materials and textures.
+  its own.
 - Until patch 16.22 every game of this PC was `mapskin = Default`. Since patch 16.23 (Nov 18, 2026) every
   game is `mapskin = Milkshake_SRS`.
-- A custom map replaces the standard map's files (or the textures they use). Under the winter skin the game
-  never loads them, so the winter map shows.
+- A container is two files: `<name>.mapgeo`, what is drawn, and `<name>.materials.bin`, the materials the
+  geometry names plus the container itself with the map's **placed objects** in named groups.
+- A custom map replaces the standard map's files, or the textures its materials use. Under the winter skin
+  the game does not load them, so the winter map shows.
 
-## What Rose does
+## First try (Nov 18-19): link the winter skin to the standard container. Dropped.
 
-With a custom map selected, Rose adds a small mod made on the spot, `rose_map_force`, right after the map mod
-(`injection/core/map_force.py`). It declares an edit of `map11.bin`: each seasonal map skin gets `Default`'s
-container as its `mMapContainerLink`. This is what the community's "Map Forcer" mod does (by TheKillerey; its
-16.22 version covers four skins, none of them the winter one). LTK Manager applies such an edit when it builds
-the overlay: it is declared in the mod's `META/info.json` under `Layers.base.GameData`, and the mod ships an
-empty `WAD/Map11.wad.client` as Map Forcer does.
+A mod made on the spot declared an edit of `map11.bin` that gave the winter skin `Default`'s container, the
+way the community's "Map Forcer" does.
 
-The list is read from the game's own `map11.bin` for each game, so a new season needs no new mod.
+1. It did nothing in two games. LTK Manager refused the edit: `Game data: Layer declarations refused: missing
+   field 'origin'`. The module needs an `origin`; only two of the Map Forcer's three keys had been copied.
+2. With the `origin`, LTK Manager applied the edit, and the game quit the moment it spawned the world, in
+   every game (`Received StartSpawn packet`, then `SentryHandleException`).
 
-**The rule: with a custom map selected, a game on a seasonal skin looks as a game on `Default` does.**
+The reason for 2: the winter container's placed objects differ from the standard one's. It has a **train**
+(`Characters/SRU_Train`, with the points it moves along) and the **shops** under other names
+(`OrderShopAreaLimits1`); 6 groups only winter has, 2 only the standard map has, 15 that point elsewhere. The
+server runs a winter game and names those objects. A client that loaded the standard container lacks them.
+"The same objects file and navigation grid" was the wrong test for "the same playfield".
 
-- Re-linked: a skin that is another look of `Default`'s playfield, which means the same objects file
-  (`mMapObjectsCFG`) and the same navigation grid. On patch 16.23 these are 11: `Milkshake_SRS`,
-  `Milkshake_Swiftplay`, `Worlds_SR_Seasonal`, `Sodapop_SRS`, `Bloom`, `A22`, `SocialSR`, `ContentCapture`,
-  `Spectator_Only_Banners`, `Tutorial`, `ULTBOOK`.
-- Left alone: a mode with objects or a grid of its own (`URF`, `Arcade`, `Ruby_SR`, `Boba_SRS`, `10Year`...).
-- Left alone: a skin whose own map the selected mod replaces (a winter-map mod ships
-  `milkshake_srs.mapgeo`: it is made for that skin).
-- Nothing is added when the selected mod declares edits of its own (Map Forcer, the winter-rift mods): it
-  says itself which map a skin loads.
-- A mod with a `map11.bin` of its own replaces the game's, so its skins are read from that file. The two
-  Noxus Rift mods link every skin to their map already: nothing to add.
+## Second try (Nov 19): the winter container stays, the standard map is drawn under it
 
-## Where it is hooked
+`injection/core/map_force.py`. Nothing in `map11.bin` is touched. A mod made on the spot, `rose_map_force`,
+gives the game, under the **winter** container's file names:
 
-- `InjectionTrigger._run_mod_injection`: after the map mod is put into the injection's mods folder.
-- `InjectionTrigger._custom_mod_plan`: a `MapForceStep` after the map's `ModStep`, so the countdown stages the
-  same mods the injection installs (`injection/core/stage_plan.py`).
+- `milkshake_srs.mapgeo`: the standard map's geometry, the game's own `base_srx.mapgeo` copied as its WAD
+  stores it (23 MB, nothing unpacked; the way the original's `skin_sounds.py` copies sound banks);
+- `milkshake_srs.materials.bin`: the winter file plus the standard map's materials it lacks. On patch 16.23
+  that is 28 of 192: the other 164 are in the winter file already, byte for byte. Entries are moved as
+  bytes, so the winter container and all its placed objects are exactly what they were.
 
-## Nov 19: the first version did nothing, and why
+Which season is ported: the map skin the newest game log of this PC names, when it has `Default`'s objects
+file and navigation grid and another container.
 
-The user after two games: "still always winter map". Rose's log showed the forcer made, staged and injected.
-LTK Manager's log (`%APPDATA%\dev.leaguetoolkit.manager\logs`) had the reason, once per game:
+Not ported in this version: a mod that says itself which map loads (declared edits: Map Forcer, the
+winter-rift mods; or a `map11.bin` of its own: the two Noxus Rift mods), and a mod that ships map geometry or
+materials of its own (Anima Squad). Of the user's 12 maps, 6 get the port.
 
-    WARN ltk_manager_library::overlay: Game data: Layer declarations refused: missing field `origin`
+Expected to look wrong even if it works: winter's decorations (snow, lights, the train) are placed objects,
+so they show on the standard map; the grass tint and the winter looks of minions and towers stay.
 
-Each module of the declarations needs `"origin": {"manifest": "game_data.yaml", "source": null, "module": 0}`
-(where LTK Manager's own tools read the module from). The community Map Forcer has it; when its form was
-copied on Nov 18 only the module's `target` and `edits` were looked at, and LTK Manager's mod check
-(`rose-mod-check`) does not read declarations, so "healthy" said nothing about them.
+### Off unless this PC asks, and first only in the Practice Tool
 
-Fixed, and this time checked with LTK Manager's own library (`ltk_game_data` 0.12.0, the version LTK Manager
-1.33.0 is built with) in a scratch program: the old form is refused with the same words, the new form is
-accepted, and applied to the game's real `map11.bin` it gives a file in which `Milkshake_SRS` and ten other
-skins link `Base_SRX`, with all 1,590 entries still there and the 15 other skins untouched.
+Two versions of the first try went into every game on offline checks alone. This one is made only when the
+file `.git/rose-map-port.txt` of this copy says so: `practice` (only for a Practice Tool game) or `on` (for
+every game). `.git` is never published and an installed copy has none, so it is off everywhere else.
 
-To see what LTK Manager made of a mod's declarations after a game: search its log for `Game data:`.
+- To try: the file says `practice`. Start Rose, open a Practice Tool lobby, select a custom map, start.
+  Rose's log says `[MAP] A custom map is selected and the game runs Milkshake_SRS: the standard map is drawn
+  under it`.
+- If the game quits: Rose's reconnect leaves the newest mod out and the game runs. Delete the file.
+- Only after a Practice Tool game has shown the custom map: `on`.
 
-## Not done, not checked (as of the switched-off state)
+### Checked offline, on the real game files
 
-- **The fixed version has not been seen in a game.** Checked: the logic on the real game files and on the
-  user's 12 map mods (7 get the forcer, 5 rightly get none), and the made mod with LTK Manager's own library
-  (above). Not checked: LTK Manager's overlay builder with it in a game started through Rose, and what the
-  game shows.
-- The winter skin changes more than the map: the grass tint, and winter looks for minions, towers and
-  monsters. Those stay. Resetting them needs properties whose names are not known.
-- Only Summoner's Rift (map 11). ARAM and the other maps have their own files.
-- Tests: `injection/tests/test_map_force.py`, three cases in `injection/tests/test_staging.py`.
+- The made mod: 2 files, 23.4 MB, written in 0.05 s.
+- The geometry under the winter name is the standard geometry (same SHA-256, 92 MB unpacked).
+- The materials file: 841 winter entries, every one byte for byte, plus 28 added. All 184 materials the
+  standard geometry names are defined in it, identical to the standard map's.
+- No name that only the winter geometry has is spelled out, or hashed, in winter's placed objects.
+- LTK Manager's rules call the packed mod healthy (they read its bin; they do not read the geometry).
+
+**Not checked, and only a game can: whether the game loads it, and what it then shows.**
+
+Tests: `injection/tests/test_map_force.py`, three cases in `injection/tests/test_staging.py`.

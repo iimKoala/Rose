@@ -1,4 +1,4 @@
-"""A custom map on a Summoner's Rift the game shows under another look (injection/core/map_force.py)."""
+"""A custom map under a season's map: the season's files with the standard map drawn (injection/core/map_force.py)."""
 
 import json
 import shutil
@@ -10,21 +10,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from injection.baseskin.propbin import Entry, Field, Value, build, fnv1a_lower
-from injection.baseskin.wad import ModWad, path_hash
+from injection.baseskin.propbin import Bin, Entry, Field, PropError, Value, build, fnv1a_lower
+from injection.baseskin.wad import GameWad, ModWad, path_hash
 from injection.core import map_force
 from injection.core.stage_plan import MapForceStep, ModStep, StagePlan, prepare_plan
 from injection.mods.mod_source import RoseFile
 
 H = fnv1a_lower
-SHIPPED_ENABLED = map_force.ENABLED  # read before any test switches it on
 BASE = "Maps/MapGeometry/Map11/Base_SRX"
 WINTER = "Maps/MapGeometry/Map11/Milkshake_SRS"
 SRX = ("ASSETS/Maps/CFG/objectcfg_SRX.cfg", "ASSETS/Maps/NavGrid/AIPath_SRX.aimesh_ngrid")
+MATERIAL = 0xFF9D3409
 
 
-def skin(name: str, container: str, playfield=SRX, entry_name: str = "") -> Entry:
-    return Entry(H("MapSkin"), H(map_force.SKIN_PREFIX + (entry_name or name)), [
+def skin(name: str, container: str, playfield=SRX) -> Entry:
+    return Entry(H("MapSkin"), H(map_force.SKIN_PREFIX + name), [
         Field(H("name"), Value.string(name)),
         Field(H("mMapContainerLink"), Value.string(container)),
         Field(H("mMapObjectsCFG"), Value.string(playfield[0])),
@@ -33,17 +33,29 @@ def skin(name: str, container: str, playfield=SRX, entry_name: str = "") -> Entr
 
 
 def map_bin(*skins: Entry) -> bytes:
-    return build([Entry(H("MapContainer"), H(BASE), [Field(H("note"), Value.string("not a skin"))]), *skins])
+    return build([Entry(H("Something"), H("else"), [Field(H("note"), Value.string("not a skin"))]), *skins])
 
 
 GAME_BIN = map_bin(
     skin("Default", BASE),
-    skin("Milkshake_SRS", WINTER),                                         # the winter look of the same playfield
-    skin("LunarRevel", BASE),                                              # on the standard map already
+    skin("Milkshake_SRS", WINTER),                                                              # winter: the same playfield
     skin("URF", "Maps/MapGeometry/Map11/URF", ("ASSETS/Maps/CFG/ObjectCFG_URF.cfg", SRX[1])),   # objects of its own
-    skin("10Year", "Maps/MapGeometry/Map11/10Year", (SRX[0], "ASSETS/Maps/NavGrid/AIPath.aimesh_ngrid")),  # another grid
-    skin("Odd", "Maps/MapGeometry/Map11/Odd", entry_name="NamedOtherwise"),  # an entry Rose cannot name
 )
+
+
+def material(name: str, texture: str) -> Entry:
+    return Entry(MATERIAL, H(name), [Field(H("texture"), Value.string(texture))])
+
+
+def container(name: str, *placed: str) -> Entry:
+    return Entry(H("MapContainer"), H(name), [Field(H("mapPath"), Value.string(name)), *(Field(H(one), Value.string(one)) for one in placed)])
+
+
+STANDARD_MATERIALS = build([container(BASE, "Shops"), material("Ground", "ground.tex"), material("Wall", "wall.tex"),
+                            material("Spawn", "spawn.tex")])
+WINTER_MATERIALS = build([container(WINTER, "Shops1", "Train"), Entry(H("Placed"), H("TrainChunk"), [Field(H("note"), Value.string("SRU_Train"))]),
+                          material("Wall", "wall.tex"), material("Ground", "snow.tex"), material("Snow", "pile.tex")])
+STANDARD_GEOMETRY, WINTER_GEOMETRY = b"OEGM standard " * 50, b"OEGM winter " * 50
 
 
 def wad_bytes(files: dict) -> bytes:
@@ -53,25 +65,48 @@ def wad_bytes(files: dict) -> bytes:
     return wad.to_bytes()
 
 
+def by_name(data: bytes) -> dict:
+    """{name hash: the entry's bytes} of a bin file"""
+    return {name_hash: raw for _owner, name_hash, raw in map_force._entries(data)[1]}
+
+
 class MapSkinsTests(unittest.TestCase):
     def test_the_skins_of_a_map_file_are_read_with_what_they_link(self):
         skins = {one.name: one for one in map_force.map_skins(GAME_BIN)}
 
-        self.assertEqual(sorted(skins), ["10Year", "Default", "LunarRevel", "Milkshake_SRS", "Odd", "URF"])
+        self.assertEqual(sorted(skins), ["Default", "Milkshake_SRS", "URF"])
         self.assertEqual((skins["Default"].container, skins["Milkshake_SRS"].container), (BASE, WINTER))
-        self.assertEqual(skins["Default"].playfield, SRX)
-        self.assertEqual((skins["Milkshake_SRS"].addressable, skins["Odd"].addressable), (True, False))
+        self.assertEqual(skins["Default"].playfield, skins["Milkshake_SRS"].playfield)
+        self.assertNotEqual(skins["Default"].playfield, skins["URF"].playfield)
 
-    def test_only_another_look_of_the_default_playfield_is_linked_to_the_standard_map(self):
-        self.assertEqual(map_force.forced(map_force.map_skins(GAME_BIN)), {"Milkshake_SRS": BASE})
+    def test_a_containers_two_files(self):
+        self.assertEqual(map_force.geometry_file(WINTER), "data/maps/mapgeometry/map11/milkshake_srs.mapgeo")
+        self.assertEqual(map_force.materials_file(BASE), "data/maps/mapgeometry/map11/base_srx.materials.bin")
 
-    def test_a_skin_whose_map_the_mod_replaces_itself_is_left_alone(self):
-        ships_winter = lambda path: path == "data/maps/mapgeometry/map11/milkshake_srs.mapgeo"
 
-        self.assertEqual(map_force.forced(map_force.map_skins(GAME_BIN), ships_winter), {})
+class MergeMaterialsTests(unittest.TestCase):
+    def test_the_seasons_file_gets_the_standard_materials_it_lacks_or_has_otherwise(self):
+        merged, added = map_force.merge_materials(WINTER_MATERIALS, STANDARD_MATERIALS)
 
-    def test_a_map_file_without_a_default_skin_links_nothing(self):
-        self.assertEqual(map_force.forced(map_force.map_skins(map_bin(skin("Milkshake_SRS", WINTER)))), {})
+        winter, standard, result = by_name(WINTER_MATERIALS), by_name(STANDARD_MATERIALS), by_name(merged)
+        self.assertEqual(added, 2, "Spawn is new, Ground is the standard one again; Wall was the same already")
+        self.assertEqual(sorted(result), sorted(set(winter) | {H("Spawn")}))
+        self.assertEqual((result[H("Spawn")], result[H("Ground")]), (standard[H("Spawn")], standard[H("Ground")]))
+        for kept in (H(WINTER), H("TrainChunk"), H("Wall"), H("Snow")):
+            self.assertEqual(result[kept], winter[kept], "the container, its placed objects and winter's own materials: byte for byte")
+        self.assertNotIn(H(BASE), result, "the standard map's container is not brought along")
+        self.assertEqual(len(Bin(merged).types), 6)
+
+    def test_nothing_to_add_gives_the_same_file(self):
+        merged, added = map_force.merge_materials(STANDARD_MATERIALS, STANDARD_MATERIALS)
+
+        self.assertEqual((added, merged), (0, STANDARD_MATERIALS))
+
+    def test_a_file_it_cannot_take_is_refused(self):
+        with self.assertRaises(PropError):
+            map_force.merge_materials(b"PTCH" + bytes(8) + WINTER_MATERIALS, STANDARD_MATERIALS)
+        with self.assertRaises(PropError):
+            map_force.merge_materials(WINTER_MATERIALS, b"not a bin")
 
 
 class ModTestCase(unittest.TestCase):
@@ -97,7 +132,7 @@ class ModViewTests(ModTestCase):
         }))
 
         self.assertEqual((view.ships(self.WINTER_GEO), view.ships("data/maps/mapgeometry/map11/base_srx.mapgeo")), (True, False))
-        self.assertIsNone(view.map_bin)
+        self.assertFalse(view.map_bin)
 
     def test_loose_files_are_asked_by_path_or_by_the_hash_in_their_name(self):
         named = map_force.mod_view(self.mod("Named.fantome", {f"WAD/map11.wad.client/{self.WINTER_GEO.upper()}": b"g"}))
@@ -106,7 +141,7 @@ class ModViewTests(ModTestCase):
         self.assertTrue(named.ships(self.WINTER_GEO) and hashed.ships(self.WINTER_GEO))
         self.assertFalse(named.ships("assets/other.tex") or hashed.ships("assets/other.tex"))
 
-    def test_a_mod_that_declares_its_own_edits_gets_nothing_from_rose(self):
+    def test_a_mod_that_declares_its_own_edits_is_told_apart(self):
         in_info = self.mod("Forcer.fantome", {"META/info.json": json.dumps({"Name": "Forcer", "Layers": {"base": {
             "GameData": {"version": 1, "modules": [{"target": map_force.MAP_BIN, "edits": [{}]}]}}}})})
         as_file = self.mod("Declares.fantome", {"META/info.json": "{}", "META/game_data/base/game_data.yaml": "version: 1\n"})
@@ -114,82 +149,138 @@ class ModViewTests(ModTestCase):
         self.assertIsNone(map_force.mod_view(in_info))
         self.assertIsNone(map_force.mod_view(as_file))
 
-    def test_a_map_file_of_its_own_is_handed_over(self):
-        own = map_bin(skin("Default", BASE), skin("Bloom", "Maps/MapGeometry/Map11/Bloom"))
-        packed = map_force.mod_view(self.mod("Packed.fantome", {"WAD/Map11.wad.client": wad_bytes({map_force.MAP_BIN: own})}))
-        loose = map_force.mod_view(self.mod("Loose.fantome", {f"WAD/Map11.wad.client/{map_force.MAP_BIN}": own}))
+    def test_a_map_file_of_its_own_is_seen(self):
+        packed = map_force.mod_view(self.mod("Packed.fantome", {"WAD/Map11.wad.client": wad_bytes({map_force.MAP_BIN: GAME_BIN})}))
+        loose = map_force.mod_view(self.mod("Loose.fantome", {f"WAD/Map11.wad.client/{map_force.MAP_BIN}": GAME_BIN}))
 
-        self.assertEqual((packed.map_bin, loose.map_bin), (own, own))
+        self.assertTrue(packed.map_bin and loose.map_bin)
 
 
-class PrepareTests(ModTestCase):
+class GameTestCase(ModTestCase):
+    """A stand-in League folder: the game's map WAD, and the logs of its last games"""
+
     def setUp(self):
         super().setUp()
-        game = self.root / "Game"
-        (game / map_force.MAP_WAD).parent.mkdir(parents=True)
-        (game / map_force.MAP_WAD).write_bytes(wad_bytes({map_force.MAP_BIN: GAME_BIN}))
+        self.game = self.root / "League" / "Game"
+        (self.game / map_force.MAP_WAD).parent.mkdir(parents=True)
+        (self.game / map_force.MAP_WAD).write_bytes(wad_bytes({
+            map_force.MAP_BIN: GAME_BIN,
+            map_force.geometry_file(BASE): STANDARD_GEOMETRY, map_force.materials_file(BASE): STANDARD_MATERIALS,
+            map_force.geometry_file(WINTER): WINTER_GEOMETRY, map_force.materials_file(WINTER): WINTER_MATERIALS,
+        }))
+        self.played("2026-11-19T01-00-00", "Milkshake_SRS")
+
+    def played(self, when: str, map_skin: str) -> None:
+        folder = self.root / "League" / "Logs" / "GameLogs" / when
+        folder.mkdir(parents=True)
+        (folder / f"{when}_r3dlog.txt").write_text(f"000001.899| ALWAYS| GameStartInfo GPP match Id = made-up, mapskin = {map_skin}\n", encoding="utf-8")
+
+
+class LastMapSkinTests(GameTestCase):
+    def test_the_newest_game_log_names_the_season(self):
+        self.played("2026-11-13T16-42-01", "Default")
+
+        self.assertEqual(map_force.last_map_skin(self.game, {"Default", "Milkshake_SRS"}), "Milkshake_SRS")
+
+    def test_a_game_on_another_map_is_looked_past(self):
+        self.played("2026-11-19T02-00-00", "HowlingAbyss")
+
+        self.assertEqual(map_force.last_map_skin(self.game, {"Default", "Milkshake_SRS"}), "Milkshake_SRS")
+
+    def test_no_logs_name_no_season(self):
+        self.assertIsNone(map_force.last_map_skin(self.root / "Nowhere" / "Game", {"Default"}))
+
+
+class ModeTests(ModTestCase):
+    def test_this_pc_has_to_ask_for_it(self):
+        word = self.root / "rose-map-port.txt"
+        with patch.object(map_force, "MODE_FILE", word):
+            self.assertEqual(map_force.mode(), "off", "no file: off, as on a PC that installed Rose")
+            for text, mode in (("practice", "practice"), ("ON\n", "on"), ("yes please", "off"), ("", "off")):
+                word.write_text(text, encoding="utf-8")
+                self.assertEqual(map_force.mode(), mode)
+
+    def test_the_word_is_kept_where_nothing_is_published_from(self):
+        self.assertEqual(map_force.MODE_FILE.parent.name, ".git")
+
+
+class PrepareTests(GameTestCase):
+    def setUp(self):
+        super().setUp()
         self.mods = self.root / "mods"
         self.mods.mkdir()
-        self.injector = SimpleNamespace(game_dir=game, mods_dir=self.mods)
-        switched_on = patch.object(map_force, "ENABLED", True)  # off since Nov 19: these test what it does when on
-        switched_on.start()
-        self.addCleanup(switched_on.stop)
+        self.injector = SimpleNamespace(game_dir=self.game, mods_dir=self.mods)
         self.plain = RoseFile(self.mod("Hexed Rift.fantome", {"META/info.json": '{"Name": "Hexed Rift"}',
                                                               "WAD/Map11.wad.client": wad_bytes({"assets/grass.tex": b"tex"})}), "Hexed Rift")
+        self.mode = "on"
+        asked = patch.object(map_force, "mode", side_effect=lambda: self.mode)
+        asked.start()
+        self.addCleanup(asked.stop)
 
-    def edits(self) -> dict:
-        info = json.loads((self.mods / map_force.FOLDER / "META" / "info.json").read_text(encoding="utf-8"))
-        module, = info["Layers"]["base"]["GameData"]["modules"]
-        self.assertEqual((info["Layers"]["base"]["GameData"]["version"], module["target"]), (1, "data/maps/shipping/map11/map11.bin"))
-        # The module's keys are the community Map Forcer's, all of them. Nov 19: without "origin" LTK Manager
-        # refused the declarations ("missing field `origin`") and the winter map stayed, in every game
-        self.assertEqual(sorted(module), ["edits", "origin", "target"])
-        self.assertEqual(module["origin"], {"manifest": "game_data.yaml", "source": None, "module": 0})
-        edits, = module["edits"]
-        return edits
+    def made(self) -> ModWad:
+        return ModWad((self.mods / "rose_map_force" / "WAD" / "Map11.wad.client").read_bytes())
 
-    def test_it_is_switched_off(self):
-        """Nov 19: with the winter skin linked to the standard map the game quit as it spawned the world"""
-        with patch.object(map_force, "ENABLED", False):
-            self.assertIsNone(map_force.prepare(self.injector, self.plain))
-        self.assertFalse((self.mods / "rose_map_force").exists())
-        self.assertFalse(SHIPPED_ENABLED, "as shipped")
-
-    def test_a_plain_custom_map_gets_the_winter_skin_linked_to_the_standard_map(self):
+    def test_the_standard_map_is_put_under_the_seasons_file_names(self):
         self.assertEqual(map_force.prepare(self.injector, self.plain), "rose_map_force")
 
-        self.assertEqual(self.edits(), {"Maps/Shipping/Map11/MapSkins/Milkshake_SRS": {"mMapContainerLink": BASE}})
-        empty = ModWad((self.mods / "rose_map_force" / "WAD" / "Map11.wad.client").read_bytes())
-        self.assertEqual(len(empty.files), 0, "an empty Map11 WAD, as the community's Map Forcer ships")
-        self.assertEqual(map_force.prepare(self.injector, self.plain), "rose_map_force", "made again for the next game")
+        wad = self.made()
+        self.assertEqual(sorted(file.name_hash for file in wad), sorted(path_hash(file(WINTER)) for file in (map_force.geometry_file, map_force.materials_file)))
+        self.assertEqual(wad.get(path_hash(map_force.geometry_file(WINTER))).data, STANDARD_GEOMETRY, "the standard geometry, as the game has it")
+        materials = by_name(wad.get(path_hash(map_force.materials_file(WINTER))).data)
+        self.assertEqual(materials[H(WINTER)], by_name(WINTER_MATERIALS)[H(WINTER)], "the winter container with its placed objects")
+        self.assertIn(H("Spawn"), materials)
+        self.assertEqual(json.loads((self.mods / "rose_map_force" / "META" / "info.json").read_text(encoding="utf-8"))["Name"], "Rose map port")
+        self.assertEqual(GameWad(self.game / map_force.MAP_WAD).read_path(map_force.geometry_file(WINTER)), WINTER_GEOMETRY, "the game's files are only read")
 
-    def test_a_winter_map_mod_and_a_mod_with_its_own_edits_get_nothing(self):
-        winter = RoseFile(self.mod("Winter.fantome", {"WAD/Map11.wad.client": wad_bytes({"data/maps/mapgeometry/map11/milkshake_srs.mapgeo": b"g"})}), "Winter")
-        forcer = RoseFile(self.mod("Forcer.fantome", {"META/info.json": json.dumps({"Layers": {"base": {"GameData": {"version": 1, "modules": []}}}})}), "Forcer")
+    def test_it_is_made_only_when_this_pc_asks_and_first_only_in_the_practice_tool(self):
+        self.mode = "off"
+        self.assertIsNone(map_force.prepare(self.injector, self.plain, practice=True))
+        self.mode = "practice"
+        self.assertIsNone(map_force.prepare(self.injector, self.plain), "a real game: nothing")
+        self.assertFalse((self.mods / "rose_map_force").exists())
+        self.assertEqual(map_force.prepare(self.injector, self.plain, practice=True), "rose_map_force")
 
-        self.assertIsNone(map_force.prepare(self.injector, winter))
-        self.assertIsNone(map_force.prepare(self.injector, forcer))
+    def test_a_game_on_the_standard_map_needs_nothing(self):
+        self.played("2026-11-20T00-00-00", "Default")
+
+        self.assertIsNone(map_force.prepare(self.injector, self.plain))
+
+    def test_a_mode_with_objects_of_its_own_is_not_ported(self):
+        self.played("2026-11-20T00-00-00", "URF")
+
+        self.assertIsNone(map_force.prepare(self.injector, self.plain))
+
+    def test_a_mod_that_says_itself_which_map_loads_or_ships_its_own_map_is_left_alone(self):
+        mods = {
+            "Forcer": {"META/info.json": json.dumps({"Layers": {"base": {"GameData": {"version": 1, "modules": []}}}})},
+            "Noxus": {"WAD/Map11.wad.client": wad_bytes({map_force.MAP_BIN: GAME_BIN})},
+            "Winter": {"WAD/Map11.wad.client": wad_bytes({map_force.geometry_file(WINTER): b"g"})},
+            "Anima": {"WAD/Map11.wad.client": wad_bytes({map_force.materials_file(BASE): STANDARD_MATERIALS})},
+        }
+        for name, entries in mods.items():
+            with self.subTest(mod=name):
+                self.assertIsNone(map_force.prepare(self.injector, RoseFile(self.mod(f"{name}.fantome", entries), name)))
         self.assertFalse((self.mods / "rose_map_force").exists())
 
-    def test_a_mod_with_a_map_file_of_its_own_has_its_skins_linked(self):
-        own = map_bin(skin("Default", BASE), skin("Bloom", "Maps/MapGeometry/Map11/Bloom"))
-        mod = RoseFile(self.mod("Noxus.fantome", {"WAD/Map11.wad.client": wad_bytes({map_force.MAP_BIN: own})}), "Noxus")
-
-        self.assertEqual(map_force.prepare(self.injector, mod), "rose_map_force")
-        self.assertEqual(list(self.edits()), ["Maps/Shipping/Map11/MapSkins/Bloom"], "the skins of the file the game will read")
-
-    def test_nothing_it_cannot_read_stops_the_injection(self):
+    def test_nothing_it_cannot_read_stops_the_injection_or_leaves_half_a_mod(self):
         broken = self.root / "Broken.fantome"
         broken.write_bytes(b"not a zip")
-        no_game = SimpleNamespace(game_dir=self.root / "nowhere", mods_dir=self.mods)
-
         self.assertIsNone(map_force.prepare(self.injector, RoseFile(broken, "Broken")))
-        self.assertIsNone(map_force.prepare(no_game, self.plain))
 
-    def test_the_staged_plan_puts_the_forcer_after_the_map(self):
-        plan = StagePlan("skin_1000", (ModStep(self.plain), MapForceStep(self.plain)))
+        (self.game / map_force.MAP_WAD).write_bytes(wad_bytes({map_force.MAP_BIN: GAME_BIN, map_force.materials_file(BASE): STANDARD_MATERIALS,
+                                                               map_force.materials_file(WINTER): WINTER_MATERIALS}))  # no geometry
+        map_force._game_skins.clear()
+        self.assertIsNone(map_force.prepare(self.injector, self.plain))
+        self.assertFalse((self.mods / "rose_map_force").exists())
 
-        self.assertEqual(prepare_plan(self.injector, plan, self.mods), ["Hexed Rift", "rose_map_force"])
+    def test_the_staged_plan_puts_it_after_the_map(self):
+        self.mode = "practice"
+
+        self.assertEqual(prepare_plan(self.injector, StagePlan("skin_1000", (ModStep(self.plain), MapForceStep(self.plain, True))), self.mods),
+                         ["Hexed Rift", "rose_map_force"])
+        shutil.rmtree(self.mods / "rose_map_force")
+        self.assertEqual(prepare_plan(self.injector, StagePlan("skin_1000", (ModStep(self.plain), MapForceStep(self.plain))), self.mods),
+                         ["Hexed Rift"], "not a Practice Tool game")
 
 
 if __name__ == "__main__":

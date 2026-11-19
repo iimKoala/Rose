@@ -77,9 +77,11 @@ class OtherSkinStep:
 
 @dataclass(frozen=True)
 class MapForceStep:
-    """The mod that links the season's map skins to the standard map, made for the selected map mod
-    *source* (injection.core.map_force): a custom map then shows on the winter map too."""
+    """The mod that draws the standard map under the season's (the winter map), made for the selected map
+    mod *source* (injection.core.map_force). An experiment: made only when this PC asks for it, and then
+    only for a Practice Tool game (*practice*) unless it asks for every game."""
     source: ModSource
+    practice: bool = False
 
 
 class StagePlan(NamedTuple):
@@ -166,7 +168,7 @@ def prepare_plan(injector, plan: StagePlan, target_dir: Path) -> Optional[List[s
             names.extend(_prepare_other_skin(injector, step, target_dir))
         elif isinstance(step, MapForceStep):
             from . import map_force
-            folder = map_force.prepare(injector, step.source, target_dir)
+            folder = map_force.prepare(injector, step.source, target_dir, practice=step.practice)
             if folder:
                 names.append(folder)
     return names or None
