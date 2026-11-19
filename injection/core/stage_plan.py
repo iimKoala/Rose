@@ -75,6 +75,13 @@ class OtherSkinStep:
     mod_path: str = ""  # CUSTOM: the saved skin, relative to the mods folder
 
 
+@dataclass(frozen=True)
+class MapForceStep:
+    """The mod that links the season's map skins to the standard map, made for the selected map mod
+    *source* (injection.core.map_force): a custom map then shows on the winter map too."""
+    source: ModSource
+
+
 class StagePlan(NamedTuple):
     """The mods an injection installs, in its order.
 
@@ -157,6 +164,11 @@ def prepare_plan(injector, plan: StagePlan, target_dir: Path) -> Optional[List[s
                 names.append(folder)
         elif isinstance(step, OtherSkinStep):
             names.extend(_prepare_other_skin(injector, step, target_dir))
+        elif isinstance(step, MapForceStep):
+            from . import map_force
+            folder = map_force.prepare(injector, step.source, target_dir)
+            if folder:
+                names.append(folder)
     return names or None
 
 

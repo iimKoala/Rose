@@ -27,6 +27,7 @@ from injection.core.stage_plan import (
     PARTY_SKINS_LABEL,
     CarrierStep,
     LoadingNameStep,
+    MapForceStep,
     ModStep,
     PartyStep,
     StagePlan,
@@ -511,6 +512,11 @@ class InjectionTrigger:
         if custom_mod.get("source") is not None:
             steps.append(ModStep(custom_mod["source"], required=True))
         steps.extend(ModStep(mod["source"]) for mod in other_mods if mod.get("source") is not None)
+        # A custom map: the mod that links the season's map skins to the standard map goes right after it,
+        # as _run_mod_injection adds it (injection.core.map_force)
+        map_mod = next((mod for mod in other_mods if mod.get("source") is not None and self._is_map_mod(mod)), None)
+        if map_mod is not None:
+            steps.insert(steps.index(ModStep(map_mod["source"])) + 1, MapForceStep(map_mod["source"]))
         try:
             skin_id = int(custom_mod.get("skin_id"))
         except (TypeError, ValueError):
@@ -519,6 +525,14 @@ class InjectionTrigger:
             steps.append(LoadingNameStep(skin_id))
         steps.extend(party)
         return StagePlan(label, tuple(steps)) if steps else None
+
+    def _is_map_mod(self, mod: dict) -> bool:
+        """Whether *mod* (an entry of _planned_other_mods) is the map mod: the selected one, or a saved
+        one, whose path starts with its category"""
+        selected = getattr(self.state, "selected_map_mod", None)
+        if selected and (mod.get("mod_name"), mod.get("relative_path")) == (selected.get("mod_name"), selected.get("relative_path")):
+            return True
+        return str(mod.get("relative_path") or "").replace("\\", "/").lower().startswith("maps/")
 
     def _planned_other_mods(self) -> list:
         """The map, font, announcer and other mods the injection installs, in
@@ -1622,6 +1636,15 @@ class InjectionTrigger:
                     mod_folder_names.append(map_mod_folder)
                     mod_names_list.append(selected_map_mod.get("mod_name", "Map"))
                     log.info(f"[INJECT] Including map mod: {selected_map_mod.get('mod_name')}")
+                    # A custom map on the season's map: the season's map skins are linked to the standard
+                    # map by a mod made on the spot (injection.core.map_force)
+                    try:
+                        from injection.core import map_force
+                        map_forcer = map_force.prepare(injector, self._current_source(selected_map_mod, mod_storage))
+                        if map_forcer:
+                            mod_folder_names.append(map_forcer)
+                    except Exception as e:
+                        log.debug(f"[INJECT] Map forcer not used: {e}")
                 else:
                     # Track missing mod's relative path for cleanup
                     relative_path = selected_map_mod.get("relative_path")

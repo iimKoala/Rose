@@ -25,6 +25,7 @@ from injection.game.reconnect import kill_game, reconnect_to_game
 from utils.core.logging import get_logger, log_event
 from utils.core.issue_reporter import report_issue
 from ..tools.bridge import BridgeCommandError, BridgeUnavailable
+from ..baseskin.skin_sounds import sound_mods
 from ..tools import int_widths, mod_checker
 from ..mods.fantome import fantome_display_name, write_fantome_zip
 from ..mods.fingerprint import mod_fingerprint
@@ -34,6 +35,7 @@ from utils.core.modpkg import is_modpkg
 from utils.system.process_list import running_processes
 from .ltf_report import (
     LATE_JOIN_MESSAGE,
+    LAUNCHER_ELEVATED_DETAIL,
     LTF_LOGS_HINT,
     LTK_ACL_REFUSAL,
     NOT_ATTACHED_MESSAGE,
@@ -505,6 +507,12 @@ class OverlayManager(ReconnectChoiceMixin):
         session["library_snapshot"] = None
 
         files, ltk_ids = split_mod_names(mod_names)
+        # A skin RoseBin built, or a custom skin Rose fixed (injection.baseskin),
+        # loads some of the game's sound banks from new paths and lists them
+        # (META/rose_sounds.json): copied here from this PC's game WADs, in the
+        # client's language, as a mod of their own. The staging builds the
+        # same mod as the injection, so it stays installed.
+        files = files + sound_mods(self.game_dir, folder_dir, files)
         wanted = []
         for name in files:
             folder = folder_dir / name
@@ -583,6 +591,10 @@ class OverlayManager(ReconnectChoiceMixin):
                     before_ids = {str(e.get("id")) for e in shared_library_read if e.get("id")}
                     entry = self.host.import_archive(ltf, Path(archive), folder, display_name, fingerprint,
                                                      before_ids=before_ids)
+                    # LTK Manager answers an archive its library holds already with that entry
+                    if str(entry.get("id")) in before_ids:
+                        shared_library_read = [e for e in shared_library_read
+                                               if str(e.get("id")) != str(entry.get("id"))]
                     shared_library_read.append(entry)
                     # Under the session's lock, as SavedModSwitches.switch: one that
                     # ended during the import removed it (LtfHost._track)
@@ -592,7 +604,9 @@ class OverlayManager(ReconnectChoiceMixin):
                             return False
                         if not entry.get("enabled"):
                             bridge.toggle(str(entry.get("id")), True)
-                    log.info(f"[INJECT] Installed {display_name} into LTK Manager")
+                            entry["enabled"] = True
+                    if str(entry.get("id")) not in before_ids:
+                        log.info(f"[INJECT] Installed {display_name} into LTK Manager")
                 except (OSError, BridgeUnavailable, BridgeCommandError) as e:
                     log.error(f"[INJECT] Could not install {display_name}: {e}")
                     if report and not stopped():
@@ -1568,17 +1582,24 @@ class OverlayManager(ReconnectChoiceMixin):
             # launcher could not do that, its lines in this log say why (#478)
             parent = self.host.logged_manager_parent
             unparented = parent is not None and parent != LAUNCHER_SHELL_PARENT
+            # Why it was not: Windows refused the launcher's helper, Rose's
+            # ltk_launcher.exe being set to run as administrator
+            launcher_elevated = unparented and self.host.logged_launcher_elevated is True
             if unparented:
                 log.error(
                     f"[INJECT] LTK Manager was not started under explorer.exe ({parent}), which the patcher's "
                     "check refuses - the ltk_launcher lines above say why"
                 )
+            if launcher_elevated:
+                log.error(f"[INJECT] {LAUNCHER_ELEVATED_DETAIL}")
             if not self._stopped_by_rose():
                 details = [f"host verification failed: {described}"]
                 if signature:
                     details.append(f"{SIGNATURE_FAILURE_MESSAGE}, {signature}")
                 if unparented:
                     details.append(f"LTK Manager's parent was not explorer.exe ({parent})")
+                if launcher_elevated:
+                    details.append(LAUNCHER_ELEVATED_DETAIL)
                 report_ltf_failure(f"LTK Manager's patcher refused the overlay ({'; '.join(details)})")
         not_attached = session.get("ltk_not_attached")
         if not_attached and not session.get("ltk_attached") and not session.get("not_attached_reported"):

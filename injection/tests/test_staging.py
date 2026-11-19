@@ -15,6 +15,7 @@ from injection.core.stage_plan import (
     PARTY_SKINS_LABEL,
     CarrierStep,
     LoadingNameStep,
+    MapForceStep,
     ModStep,
     PartyStep,
     StagePlan,
@@ -974,6 +975,7 @@ class StagingPlanTests(unittest.TestCase):
         self.assertEqual(plan, StagePlan("skin_1001", (
             CarrierStep("skin_1001", "Leona", 1),
             ModStep(RoseFile(path, "Rift")),
+            MapForceStep(RoseFile(path, "Rift")),  # a custom map: the season's map skins linked to the standard map
             LoadingNameStep(1001),
         )))
         self.assertIsNone(self.state.selected_map_mod)  # staging selects nothing
@@ -986,7 +988,21 @@ class StagingPlanTests(unittest.TestCase):
 
         plan = self.trigger.staging_plan("skin_1000", "Leona")
 
-        self.assertEqual(plan.steps, (ModStep(rift), LoadingNameStep(1000)))
+        self.assertEqual(plan.steps, (ModStep(rift), MapForceStep(rift), LoadingNameStep(1000)))
+
+    def test_only_the_map_among_the_other_mods_gets_the_map_forcer(self):
+        self.state.last_hovered_skin_id = 1000
+        rift = RoseFile(self.mods_root / "maps" / "Rift", "Rift")
+        font = RoseFile(self.mods_root / "fonts" / "Round", "Round")
+        for mod in (rift, font):
+            mod.path.mkdir(parents=True)
+        self.state.selected_font_mod = {"mod_name": "Round", "relative_path": "fonts/Round", "source": font}
+
+        self.assertEqual(self.trigger.staging_plan("skin_1000", "Leona").steps, (ModStep(font), LoadingNameStep(1000)))
+
+        self.state.selected_map_mod = {"mod_name": "Rift", "relative_path": "maps/Rift", "source": rift}
+        self.assertEqual(self.trigger.staging_plan("skin_1000", "Leona").steps,
+                         (ModStep(rift), MapForceStep(rift), ModStep(font), LoadingNameStep(1000)))
 
     def test_a_selected_mod_ltk_manager_lost_since_it_was_picked_is_left_out(self):
         """The pick keeps the entry its mod had then: a sync marked it missing since"""
