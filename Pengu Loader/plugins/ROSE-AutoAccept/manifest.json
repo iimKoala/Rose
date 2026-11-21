@@ -1,0 +1,8 @@
+{
+  "name": "ROSE-AutoAccept",
+  "version": "1.0.0",
+  "description": "Accepts the match found window for you; a button in the top bar turns it on and off",
+  "author": "Rose Team",
+  "main": "index.js",
+  "enabled": true
+}

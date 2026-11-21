@@ -45,6 +45,7 @@
 - A skin of your choice on **other players' champions**
 - Party mode that **sends the skin files** to your friends
 - A choice of **which mods to turn off** when you reconnect
+- **Auto accept** for the match found window
 - A **mod check** inside Rose
 - **Install and update** straight from this repository
 
@@ -52,7 +53,7 @@
 </tr>
 </table>
 
-As of November 2026 the fork is 4 new client plugins and about 21,000 added lines on top of the original. The
+As of November 2026 the fork is 5 new client plugins and about 21,000 added lines on top of the original. The
 original's updates are merged in as they come, and nothing of the original is removed.
 
 ## What the fork adds
@@ -69,6 +70,7 @@ Several of these are days old. Each one's design note ends with what was checked
 | 🎭 | **Other players' skins** | Pick the skin each other player's champion shows on your screen: a Riot skin, one of your custom skins, or none. *New: not yet proven in a real game.* | [design](../docs/other-players-skins.md) |
 | 🤝 | **Party skin sharing** | In the original, a friend's custom skin shows only if you have the same file. Here the file is sent, so it appears by itself. | [design](../docs/party-mod-sharing.md) |
 | 🔌 | **Reconnect choice** | After a crash, choose which mods to turn off before you reconnect, in place of all of them. | [design](../docs/reconnect-mod-choice.md) |
+| ✅ | **Auto accept** | Accepts the match found window for you. A check mark in the top bar turns it on and off: grey is off, gold is on, and it is off until you press it. *New: not yet seen in the client.* | [design](../docs/auto-accept.md) |
 
 ### In the game
 
@@ -99,6 +101,9 @@ client offer. Nothing reads or writes the game's memory.
 2. Install LTK Manager once: Rose applies skins through it. See
    [LTK Manager Requirement](../README.md#ltk-manager-requirement) in the original's README.
 3. Start Rose from the shortcut. It asks for administrator rights, looks for an update, then starts.
+
+Every step in detail, what each window means, how to check that it works, and what to do when something goes
+wrong: the **[install guide](../docs/install-guide.md)**.
 
 > [!IMPORTANT]
 > This fork runs from its source, not as `Rose.exe`: its account window, mod store and in-game panels are
