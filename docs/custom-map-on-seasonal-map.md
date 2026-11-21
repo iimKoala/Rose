@@ -1,4 +1,4 @@
-# A custom map under the season's map (an experiment: off; seen working once, in the Practice Tool)
+# A custom map under the season's map (an experiment: off; on for every game on the developer's PC)
 
 Asked for on Nov 18: "latest league patch put winter map, can you look into custom maps overriding it?" and
 "they made the winter map the official standard map, i still want to use custom". After the first try made
@@ -91,5 +91,12 @@ The user's Practice Tool game with Hell Rift selected, mode `practice`: "Custom 
 What that shows: the game loads the port and spawns the world, which is where the first way died. What it
 does not show: a whole game (minions from 0:30 on, the shop, the drakes changing the terrain, the train
 moving, other players), and the five other maps that get the port.
+
+### On for every game on the developer's PC (Nov 21)
+
+Asked on Nov 19 whether to turn it on for all games on this PC, the user answered on Nov 21: "Yes, all
+games". `.git/rose-map-port.txt` says `on` there. It is still off everywhere else: the file is not published.
+A whole game with it has not been seen yet. If a game quits at its start, Rose's reconnect leaves the newest
+mod out and the game runs on the winter map; the file then goes back to `practice` or is deleted.
 
 Tests: `injection/tests/test_map_force.py`, three cases in `injection/tests/test_staging.py`.
