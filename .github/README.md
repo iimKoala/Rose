@@ -41,7 +41,7 @@
 - An **account switcher**
 - A **mod store**
 - **Builds** in champ select
-- Three **in-game panels**: build strip, gold board, player stats
+- Three **in-game panels**: build strip (with your CS a minute), gold board, player stats
 - A skin of your choice on **other players' champions**
 - Party mode that **sends the skin files** to your friends
 - A choice of **which mods to turn off** when you reconnect
@@ -74,12 +74,13 @@ Several of these are days old. Each one's design note ends with what was checked
 
 ### In the game
 
-Three small windows over a borderless or windowed game. They read what Riot's own local game API and the League
+Small windows over a borderless or windowed game. They read what Riot's own local game API and the League
 client offer. Nothing reads or writes the game's memory.
 
 | | Panel | What it shows | More |
 |:-:|---|---|---|
 | 🧱 | **Build strip** | Between the minimap and the abilities: the next items of your build and their parts, lit when you have the gold. | [design](../docs/in-game-build-guide.md) |
+| 🌾 | **CS a minute** | A row of text above the build strip: your creep score per minute of game time. Ctrl+Shift+C turns it off and on. *New: not yet seen in a real game.* | [design](../docs/cs-per-minute.md) |
 | 💰 | **Gold board** | Hold Tab: for each lane, the difference in item gold between you and your lane opponent. | [design](../docs/in-game-gold-board.md) |
 | 📊 | **Player stats** | Ctrl+X: every player's rank, win rate and season peak, in lane order. Ranks come from the client, the rest from deeplol. Your own account is never sent there. | [design](../docs/player-stats-panel.md) |
 

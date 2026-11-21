@@ -62,7 +62,7 @@ In the League client's top bar, on the right, you should see Rose's own button a
 Then:
 
 - **Champion select**: hover any skin of your champion, owned or not. It is applied when the game starts. The **Builds** panel shows the builds of the champion's best one-trick players.
-- **In the game** (borderless or windowed): the build strip sits between the minimap and your abilities. Hold **Tab** for the gold board. Press **Ctrl+X** for the player stats.
+- **In the game** (borderless or windowed): the build strip sits between the minimap and your abilities, with your CS a minute in a row above it (**Ctrl+Shift+C** turns that row off and on). Hold **Tab** for the gold board. Press **Ctrl+X** for the player stats.
 
 Play one Practice Tool game first: it shows in a minute whether skins load.
 

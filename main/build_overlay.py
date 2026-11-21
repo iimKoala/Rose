@@ -8,6 +8,9 @@ A small program of its own, started by Rose when a game starts (main/game_build.
 It asks the game's own local "Live Client Data" address once a second for the player's gold and items, and
 draws what main/build_guide.py answers. It never touches the game: the window is always on top, lets the
 mouse through and never takes the keyboard. Hold Ctrl+Alt to drag it. Design: docs/in-game-build-guide.md.
+
+Above the icons a row of text says the player's CS a minute (main/cs_rate.py; Ctrl+Shift+C in the game turns
+it off and on, and that is remembered). Design: docs/cs-per-minute.md.
 """
 
 import ctypes
@@ -25,6 +28,7 @@ import urllib3
 from PIL import Image, ImageEnhance, ImageTk
 
 from main.build_guide import COMPONENTS_SHOWN, next_step
+from main.cs_rate import CsRate, label, read_cs
 from main.game_build import guide_dir, load_game_build, load_item_prices
 from main.gold_board import GoldBoard
 from main.gold_compare import lane_gold
@@ -33,10 +37,12 @@ from main.stats_panel import StatsPanel
 GAME_API = "https://127.0.0.1:2999/liveclientdata/allgamedata"  # Riot's documented local address of a running game
 TARGET, PART, PAD = 44, 34, 6  # icon sizes and spacing, in pixels
 WIDTH, HEIGHT = PAD + TARGET + 14 + COMPONENTS_SHOWN * (PART + PAD), TARGET + 2 * PAD
+ROW = 16  # the CS readout's row above the icons, in pixels
 DARK, GOLD, DIM, GREEN = "#010a13", "#c8aa6e", "#3c3c41", "#3ddc97"
 WAIT_FOR_GAME_S, GAME_GONE_S = 900, 20
 GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE = -20, 0x80000, 0x20, 0x80, 0x08000000
-VK_CONTROL, VK_MENU = 0x11, 0x12
+VK_CONTROL, VK_MENU, VK_SHIFT, VK_C = 0x11, 0x12, 0x10, 0x43
+CS_OFF = "cs_readout_off"  # this file in the guide's folder: the user turned the CS readout off (Ctrl+Shift+C)
 
 
 _noted = ""  # the last error written down
@@ -74,21 +80,25 @@ class Strip:
         self.stop_at = time.monotonic() + seconds if seconds else 0
         self.step, self.shown, self.running, self.grab = None, "nothing yet", True, (0, 0)
         self.gold = None  # the gold board's numbers
+        self.cs_rate, self.cs = CsRate(), None  # the CS readout's text; None until the game answers
+        self.cs_on, self.cs_key = not (guide_dir() / CS_OFF).exists(), False
+        self.top = 0  # how far the icons are below the window's top: the readout's row, when it shows
         self.root = tk.Tk()
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.92)
         self.canvas = tk.Canvas(self.root, width=WIDTH, height=HEIGHT, bg=DARK, highlightthickness=1, highlightbackground=DIM)
         self.canvas.pack()
-        x, y = place or self._saved_place() or (int(self.root.winfo_screenwidth() * 0.66), self.root.winfo_screenheight() - HEIGHT - 12)
-        self.root.geometry(f"{WIDTH + 2}x{HEIGHT + 2}+{x}+{y}")
+        # The place is the icons' top left corner, as before the readout: its row is drawn above it
+        self.place = place or self._saved_place() or (int(self.root.winfo_screenwidth() * 0.66), self.root.winfo_screenheight() - HEIGHT - 12)
+        self.root.geometry(f"{WIDTH + 2}x{HEIGHT + 2}+{self.place[0]}+{self.place[1]}")
         self.root.withdraw()  # nothing to show until the game answers
         self.root.update_idletasks()
         self.window = ctypes.windll.user32.GetParent(self.root.winfo_id())
         self.through = None
         self._let_mouse_through(True)
         self.canvas.bind("<ButtonPress-1>", lambda e: setattr(self, "grab", (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())))
-        self.canvas.bind("<B1-Motion>", lambda e: self.root.geometry(f"+{e.x_root - self.grab[0]}+{e.y_root - self.grab[1]}"))
+        self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", lambda e: self._save_place())
         self.images = {}
         self.board = GoldBoard(self.root, board_always) if self.prices else None
@@ -114,11 +124,27 @@ class Strip:
         except (OSError, ValueError, KeyError, TypeError):
             return None
 
+    def _drag(self, event) -> None:
+        x, y = event.x_root - self.grab[0], event.y_root - self.grab[1]
+        self.root.geometry(f"+{x}+{y}")
+        self.place = (x, y + self.top)  # a redraw during the drag must not put the window back
+
     def _save_place(self) -> None:
         try:
-            (guide_dir() / "position.json").write_text(json.dumps({"x": self.root.winfo_x(), "y": self.root.winfo_y()}), encoding="utf-8")
+            (guide_dir() / "position.json").write_text(json.dumps({"x": self.place[0], "y": self.place[1]}), encoding="utf-8")
         except OSError:
             pass  # the strip just opens in its default place next time
+
+    def _toggle_cs(self) -> None:
+        """Ctrl+Shift+C in the game: the CS readout off or on, remembered for the next games"""
+        self.cs_on = not self.cs_on
+        try:
+            if self.cs_on:
+                (guide_dir() / CS_OFF).unlink(missing_ok=True)
+            else:
+                (guide_dir() / CS_OFF).write_text("", encoding="utf-8")
+        except OSError:
+            pass  # it is off or on for this game only
 
     def _watch_game(self) -> None:
         """Ask the game once a second. Ends the program when no game comes, or the game has gone."""
@@ -141,6 +167,8 @@ class Strip:
                     if self.build:
                         self.step = next_step(self.build["order"], game[1], game[0], self.build["recipes"]) or "done"
                     self.gold = lane_gold(data, self.prices) if self.prices else None
+                    cs = read_cs(data)
+                    self.cs = label(self.cs_rate.update(*cs)) if cs else None
             except (requests.RequestException, ValueError):
                 game = None  # no game yet, or no game any more
             except Exception:
@@ -165,9 +193,19 @@ class Strip:
             self.images[key] = ImageTk.PhotoImage(ImageEnhance.Brightness(image).enhance(brightness))
         return self.images[key]
 
-    def _draw(self, step: dict) -> None:
+    def _draw(self, step: Optional[dict], text: Optional[str]) -> None:
+        """The readout's row (when there is *text*) and under it the step's icons (when there is a *step*).
+        The icons stay where they are: the row is added above them."""
+        self.top = ROW if text else 0
+        height = self.top + (HEIGHT if step else 0)
         self.canvas.delete("all")
-        y = PAD + 1
+        self.canvas.configure(height=height)
+        self.root.geometry(f"{WIDTH + 2}x{height + 2}+{self.place[0]}+{self.place[1] - self.top}")
+        if text:
+            self.canvas.create_text(PAD, ROW // 2 + 1, anchor="w", text=text, fill=GOLD, font=("Segoe UI", 9, "bold"))
+        if not step:
+            return
+        y = self.top + PAD + 1
         self.canvas.create_image(PAD, y, anchor="nw", image=self._icon(step["target"], TARGET, 1.0 if step["affordable"] else 0.55))
         self.canvas.create_rectangle(PAD, y, PAD + TARGET, y + TARGET, outline=GOLD if step["affordable"] else DIM, width=2)
         self.canvas.create_text(PAD + TARGET + 7, y + TARGET // 2, text="‹", fill=GOLD, font=("Segoe UI", 12, "bold"))
@@ -197,16 +235,21 @@ class Strip:
         user32 = ctypes.windll.user32
         moving = bool(user32.GetAsyncKeyState(VK_CONTROL) & 0x8000 and user32.GetAsyncKeyState(VK_MENU) & 0x8000)
         self._let_mouse_through(not moving)
-        step = self.step
-        shown = json.dumps(step, sort_keys=True)
+        keys = all(user32.GetAsyncKeyState(key) & 0x8000 for key in (VK_CONTROL, VK_SHIFT, VK_C)) and GoldBoard._game_in_front()
+        if keys and not self.cs_key:
+            self._toggle_cs()
+        self.cs_key = keys
+        step = self.step if isinstance(self.step, dict) else None
+        text = self.cs if self.cs_on else None
+        shown = json.dumps([step, text], sort_keys=True)
         if shown != self.shown:
             self.shown = shown
-            if isinstance(step, dict):
-                self._draw(step)
+            if step or text:
+                self._draw(step, text)
                 self.root.deiconify()
                 self.root.attributes("-topmost", True)
             else:
-                self.root.withdraw()  # no answer from the game yet, or every item is bought
+                self.root.withdraw()  # no answer from the game yet, or every item is bought and the readout is off
         if self.board:
             self.board.tick(self.gold)
         self.stats_panel.tick()
