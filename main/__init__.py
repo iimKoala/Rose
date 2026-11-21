@@ -814,6 +814,11 @@ def run_league_unlock(args: Optional[argparse.Namespace] = None,
     verifier = StartupInjectionVerifier(lcu, state, t_ui.websocket_server, _warn_pengu_injection_failed)
     thread_manager.register("Startup injection verifier", verifier, stop_method=verifier.stop)
     verifier.start()
+
+    # This fork: an installed copy downloads new versions while it runs and asks to restart when no game,
+    # queue or champion select is on (main/self_update.py). Nothing for a developer's copy or a Rose.exe.
+    from main import self_update
+    self_update.start(state, tray_manager.quit_callback if tray_manager else (lambda: setattr(state, "stop", True)))
     
     # Run main loop
     try:

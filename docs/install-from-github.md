@@ -36,6 +36,40 @@ developer's PC does.
 - The copy lives in `%LOCALAPPDATA%\Programs\Rose`. Accounts, mods and settings are in `%LOCALAPPDATA%\Rose`
   as always, and no update touches them.
 
+## Updates while Rose runs (Nov 19)
+
+Asked for on Nov 19: "setup auto update for anyone that has my version of rose downloaded? downloads any
+pushed updates, and notifies after a game/if user is not a game/champ select".
+
+Before, a copy was brought up to date only when it started, so a Rose left open for days never saw a new
+version. Now (`main/self_update.py`, for installed copies only):
+
+- **Every 30 minutes** (first after 5) Rose asks GitHub for the newest commit id of `release`: the same one
+  small request the start makes. GitHub allows 60 an hour.
+- **A new version is downloaded, not installed** (`rose_update.stage`): Rose is running from the files it would
+  replace. The zip waits as `.rose-update.zip` with its version in `.rose-update-version`. A download that is
+  not a whole zip is not kept.
+- **One question a version, when the user is free**: a Yes/No window, "A new version of Rose was downloaded.
+  Restart Rose now to install it?". Free means the client's phase is none of Matchmaking, ReadyCheck,
+  ChampSelect, GameStart, InProgress, Reconnect, WaitingForStats, PreEndOfGame: so it comes after the game, or
+  at once when nothing is on. A version that arrives during a game waits for its end.
+- **Yes**: Rose writes the note `.rose-restart` and quits as from the tray. `Start Rose.bat` sees the note,
+  runs the updater (which installs the waiting zip without downloading it again) and starts Rose again in the
+  same window. A game found while the question stood open is not interrupted.
+- **No**: Rose runs on. The next start installs the waiting zip, also without internet.
+
+`Start Rose.bat` is replaced by the updater while cmd is running it, and cmd reads on from where it was. So
+every line up to the one that starts Rose stays byte for byte; the new lines are below it (a test pins this).
+The first start after this version is published already uses them.
+
+Nothing of this runs in a developer's copy (`.git`) or in a built `Rose.exe`. Whatever fails (no internet,
+GitHub's limit, a broken download) is logged and waits for the next look; it never stops Rose.
+
+Tests: `test/test_self_update.py` (the watcher; the updater, the question and Rose's state are stand-ins),
+`WhileRoseRunsTests` in `test/test_rose_update.py`. Checked for real: the download step against GitHub in a
+scratch folder (10.8 MB in 2.8 s), and the start script's own lines with stand-in programs (updater, Rose,
+note, updater, Rose). Not checked: the window and the restart on an installed copy.
+
 ## Publishing, and what never leaves the developer's PC
 
 `python scripts/publish.py` is the only way this version is published.

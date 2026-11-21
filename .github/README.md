@@ -86,7 +86,7 @@ client offer. Nothing reads or writes the game's memory.
 - **Mod check.** `rose-mod-check` is a small separate program built on LTK Manager's own rules. It checks and
   repairs a mod without LTK Manager opening. It is GPL like LTK Manager, which is why it stays a program of its
   own ([its license](../native/rose-mod-check/LICENSE)).
-- **Install and update from GitHub.** One file to run, then Rose updates itself each time it starts
+- **Install and update from GitHub.** One file to run, then Rose updates itself each time it starts. While it runs it downloads new versions too, and asks to restart when you are not in a game, a queue or champion select
   ([how](../docs/install-from-github.md)).
 - **A check before every publish.** Everything sent to this repository is first searched for the developer's
   private values: names, accounts, keys. One hit and nothing is published.

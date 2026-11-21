@@ -29,6 +29,8 @@ REPO = "iimKoala/Rose"
 BRANCH = "release"
 TOOLS_URL = f"https://github.com/{REPO}/releases/download/tools/rose-tools.zip"
 VERSION_FILE, FILES_FILE, PACKAGES_FILE = ".rose-version", ".rose-files", ".rose-packages"
+# An update downloaded while Rose ran (main/self_update.py), waiting for the next start to be installed
+STAGED_FILE, STAGED_VERSION_FILE = ".rose-update.zip", ".rose-update-version"
 PACKAGE_LISTS = ("requirements.txt", "requirements-run.txt")
 # The plugins' own settings on this PC: put there once, never replaced by an update
 KEPT = ("Pengu Loader/datastore", "Pengu Loader/config")
@@ -153,18 +155,75 @@ def make_shortcut(root: Path, run=subprocess.run) -> None:
     run(["powershell", "-NoProfile", "-Command", script], check=True, env=env)
 
 
+def staged_version(root: Path) -> str:
+    """The version downloaded while Rose ran and not installed yet; "" for none"""
+    try:
+        version = (root / STAGED_VERSION_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return version if re.fullmatch(r"[0-9a-f]{40}", version) and (root / STAGED_FILE).exists() else ""
+
+
+def drop_staged(root: Path) -> None:
+    for name in (STAGED_FILE, STAGED_VERSION_FILE, STAGED_FILE + ".part"):
+        try:
+            (root / name).unlink()
+        except OSError:
+            pass
+
+
+def stage(root: Path, fetch=fetch) -> str:
+    """Download the newest version without installing it: Rose is running from the files it would replace.
+    Returns the version that waits for the next start; "" when this copy is up to date, or a developer's.
+    A download that is not a whole zip is not kept. Raises what GitHub's answer raises."""
+    if (root / ".git").exists():
+        return ""
+    version_file = root / VERSION_FILE
+    current = version_file.read_text(encoding="utf-8").strip() if version_file.exists() else ""
+    newest = latest_version(fetch)
+    if newest == current:
+        drop_staged(root)
+        return ""
+    if staged_version(root) == newest:
+        return newest
+    archive = fetch(f"https://github.com/{REPO}/archive/{newest}.zip")
+    with zipfile.ZipFile(io.BytesIO(archive)) as packed:
+        if not packed.namelist() or packed.testzip() is not None:
+            raise ValueError("the download is damaged")
+    part = root / (STAGED_FILE + ".part")
+    part.write_bytes(archive)
+    part.replace(root / STAGED_FILE)
+    (root / STAGED_VERSION_FILE).write_text(newest, encoding="utf-8")
+    return newest
+
+
 def update(root: Path, installing: bool, fetch=fetch, run=subprocess.run) -> str:
     """Bring *root* to the newest version; returns what was done, in words"""
     root.mkdir(parents=True, exist_ok=True)
     version_file = root / VERSION_FILE
     current = version_file.read_text(encoding="utf-8").strip() if version_file.exists() else ""
-    newest = latest_version(fetch)
+    staged = staged_version(root)
+    try:
+        newest = latest_version(fetch)
+    except Exception:
+        if not staged:
+            raise
+        newest = staged  # GitHub cannot be asked now: what was downloaded while Rose ran is installed
     done = "Rose is up to date"
     if newest != current:
-        print("Downloading the newest Rose...")
-        removed = apply_source(fetch(f"https://github.com/{REPO}/archive/{newest}.zip"), root)
+        try:
+            if staged == newest:
+                archive = (root / STAGED_FILE).read_bytes()
+            else:
+                print("Downloading the newest Rose...")
+                archive = fetch(f"https://github.com/{REPO}/archive/{newest}.zip")
+            removed = apply_source(archive, root)
+        finally:
+            drop_staged(root)  # installed, outdated, or unusable: the next start downloads anew
         version_file.write_text(newest, encoding="utf-8")
         done = f"Rose is now at version {newest[:8]}" + (f" ({removed} old file(s) removed)" if removed else "")
+    else:
+        drop_staged(root)
     ensure_packages(root, run)
     ensure_tools(root, fetch)
     if installing:

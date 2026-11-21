@@ -16,7 +16,7 @@ spec = importlib.util.spec_from_file_location("rose_update", SCRIPT)
 rose_update = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rose_update)
 
-V1, V2 = "1" * 40, "2" * 40
+V1, V2, V3 = "1" * 40, "2" * 40, "3" * 40
 TOOL_FILES = {tool: b"program" for tool in rose_update.TOOLS}
 
 
@@ -214,7 +214,109 @@ class UpdateTests(UpdateCase):
         self.assertEqual((self.root / "main.py").read_bytes(), b"print('rose')")
 
 
+class WhileRoseRunsTests(UpdateCase):
+    """stage(): a new version is downloaded while Rose runs (main/self_update.py) and installed at the next start"""
+
+    def setUp(self):
+        super().setUp()
+        self.update(Github(), installing=True)
+        self.commands.clear()
+        self.newer = Github(V2, source(**{"main.py": b"print('newer')"}))
+
+    def waiting(self) -> list:
+        return sorted(path.name for path in self.root.iterdir() if path.name.startswith(".rose-update"))
+
+    def test_a_new_version_is_downloaded_and_not_installed(self):
+        self.assertEqual(rose_update.stage(self.root, self.newer), V2)
+
+        self.assertEqual(self.waiting(), [".rose-update-version", ".rose-update.zip"])
+        self.assertEqual((self.root / "main.py").read_bytes(), b"print('rose')", "Rose is running from these files")
+        self.assertEqual((self.root / rose_update.VERSION_FILE).read_text(), V1)
+
+    def test_nothing_new_downloads_nothing(self):
+        github = Github()
+
+        self.assertEqual(rose_update.stage(self.root, github), "")
+        self.assertEqual((github.downloads(), self.waiting()), ([], []))
+
+    def test_a_version_already_downloaded_is_not_downloaded_again(self):
+        rose_update.stage(self.root, self.newer)
+        again = Github(V2, self.newer.files)
+
+        self.assertEqual(rose_update.stage(self.root, again), V2)
+        self.assertEqual(again.downloads(), [])
+
+    def test_the_next_start_installs_it_without_downloading_it_again(self):
+        rose_update.stage(self.root, self.newer)
+        at_start = Github(V2, self.newer.files)
+
+        said = self.update(at_start)
+
+        self.assertIn("now at version 22222222", said)
+        self.assertEqual((self.root / "main.py").read_bytes(), b"print('newer')")
+        self.assertEqual((at_start.downloads(), self.waiting()), ([], []))
+
+    def test_without_internet_the_next_start_still_installs_it(self):
+        rose_update.stage(self.root, self.newer)
+
+        def offline(url, accept=""):
+            raise OSError("no internet")
+
+        self.update(offline)
+
+        self.assertEqual((self.root / "main.py").read_bytes(), b"print('newer')")
+        self.assertEqual((self.root / rose_update.VERSION_FILE).read_text(), V2)
+
+    def test_a_version_newer_than_the_downloaded_one_wins(self):
+        rose_update.stage(self.root, self.newer)
+        newest = Github(V3, source(**{"main.py": b"print('newest')"}))
+
+        self.update(newest)
+
+        self.assertEqual((self.root / "main.py").read_bytes(), b"print('newest')")
+        self.assertEqual((len(newest.downloads()), self.waiting()), (1, []))
+
+    def test_a_damaged_download_is_not_kept(self):
+        def damaged(url, accept=""):
+            return V2.encode() if "api.github.com" in url else b"<html>try again later</html>"
+
+        with self.assertRaises(zipfile.BadZipFile):
+            rose_update.stage(self.root, damaged)
+        self.assertEqual(self.waiting(), [])
+
+    def test_a_download_the_start_cannot_use_is_dropped_and_rose_starts(self):
+        rose_update.stage(self.root, self.newer)
+        (self.root / rose_update.STAGED_FILE).write_bytes(b"cut short")
+        script_in_copy = self.root / "scripts" / "rose_update.py"
+
+        with patch.object(rose_update, "__file__", str(script_in_copy)), patch.object(rose_update, "fetch", Github(V2, self.newer.files)),                 patch("builtins.print"):
+            code = rose_update.main([])
+
+        self.assertEqual((code, self.waiting()), (0, []), "the next start downloads anew")
+        self.assertEqual((self.root / "main.py").read_bytes(), b"print('rose')")
+
+    def test_a_developers_copy_downloads_nothing(self):
+        (self.root / ".git").mkdir()
+
+        def never(url, accept=""):
+            raise AssertionError("GitHub must not be asked")
+
+        self.assertEqual(rose_update.stage(self.root, never), "")
+
+
 class SafetyTests(UpdateCase):
+    def test_start_rose_bat_keeps_the_lines_a_running_copy_has_read(self):
+        """An update replaces Start Rose.bat while cmd runs it, and cmd reads on from where it was: everything
+        up to the line that starts Rose must stay byte for byte, new lines go below it."""
+        lines = (SCRIPT.parents[1] / "Start Rose.bat").read_text(encoding="utf-8").splitlines()
+        first_start = lines.index(r'".venv\Scripts\python.exe" main.py')
+
+        self.assertEqual(first_start, 17)
+        self.assertEqual(lines[15:17], [r'".venv\Scripts\python.exe" scripts\rose_update.py',
+                                        "echo Starting Rose. Keep this window open; close it to stop Rose."])
+        self.assertEqual((lines[0], lines[9], lines[18]), ("@echo off", 'cd /d "%~dp0"', ":ended"))
+        self.assertIn('if exist ".rose-restart" goto again', lines[18:])
+
     def test_a_developers_copy_is_never_touched(self):
         (self.root / ".git").mkdir(parents=True)
         (self.root / "main.py").write_bytes(b"my work")

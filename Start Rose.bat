@@ -16,4 +16,17 @@ if not errorlevel 1 (
 ".venv\Scripts\python.exe" scripts\rose_update.py
 echo Starting Rose. Keep this window open; close it to stop Rose.
 ".venv\Scripts\python.exe" main.py
+:ended
+rem Everything above this line must stay byte for byte as it is: an update replaces this file while it runs,
+rem and cmd reads on from where it was. New lines go below.
+rem Rose asked to be started again (an update downloaded while it ran, main\self_update.py): the update is
+rem installed and Rose starts again in this window.
+if exist ".rose-restart" goto again
 pause
+exit /b
+:again
+del ".rose-restart" >nul 2>&1
+".venv\Scripts\python.exe" scripts\rose_update.py
+echo Starting Rose. Keep this window open; close it to stop Rose.
+".venv\Scripts\python.exe" main.py
+goto ended
