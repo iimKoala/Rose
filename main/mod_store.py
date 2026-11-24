@@ -1260,6 +1260,10 @@ class ModStore:
             self.show_status("Not installed: " + str(checked.get("error")))
             Path(file).unlink(missing_ok=True)
             return
+        if checked.get("baseSkinPending"):
+            # LTK Manager's skinhack rule only stands on a champion's skin, and only a skin's install
+            # matches it to the base skin before the rule is judged again: offer it as a skin
+            guess_kind = "champion"
 
         # 3) Champions
         champions = []

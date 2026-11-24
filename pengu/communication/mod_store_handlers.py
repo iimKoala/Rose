@@ -113,6 +113,11 @@ class ModStoreHandlersMixin:
         A mod LTK Manager would turn off is deleted and answered with the reason, so nobody picks a skin
         for a mod that can't be played. "health" None: the check didn't run (champion select, a game,
         LTK Manager missing); the install checks again anyway.
+
+        The skinhack rule alone does not delete it here: the download is still as its author made it, and
+        the install matches a champion skin to the base skin (_fix_base_skin) before LTK Manager's rules
+        judge it, as adding the same file by hand does. A mod the rule still stands on after that is
+        removed by the install (_check_imported_mods). The answer then has "baseSkinPending": True.
         """
         try:
             file = self._store_download_path(payload.get("file"))
@@ -124,14 +129,25 @@ class ModStoreHandlersMixin:
             phase = getattr(getattr(self, "shared_state", None), "phase", None)
             busy = phase in getattr(self, "_MOD_CHECK_BUSY_PHASES", ()) or bool(getattr(injection_manager, "_injection_in_progress", False))
             result = overlay.check_mod(file, file.stem) if overlay is not None and not busy else None
-            if result and result.get("problems"):
-                from pengu.communication.message_handler import _rejected_import
-                error = _rejected_import({"fileName": file.name}, result)["error"]
-                file.unlink(missing_ok=True)
-                log.warning("Store download %s not kept: %s", file.name, error)
-                self._send_mod_store_response(payload, {"type": "mod-store-check-response", "success": False, "error": error})
-                return
-            self._send_mod_store_response(payload, {"type": "mod-store-check-response", "success": True, "health": result})
+            problems = (result or {}).get("problems") or []
+            pending = False
+            if problems:
+                from pengu.communication.message_handler import SKINHACK_RULE, _rejected_import
+                # What the install's base-skin fix does not change: these decide here
+                final = [problem for problem in problems if problem.get("rule") != SKINHACK_RULE]
+                if final:
+                    error = _rejected_import({"fileName": file.name}, {**result, "problems": final})["error"]
+                    file.unlink(missing_ok=True)
+                    log.warning("Store download %s not kept: %s", file.name, error)
+                    self._send_mod_store_response(payload, {"type": "mod-store-check-response", "success": False, "error": error})
+                    return
+                pending = True
+                log.info("Store download %s kept for the install: LTK Manager's skinhack rule is judged again "
+                         "once the skin is matched to the base skin", file.name)
+            answer = {"type": "mod-store-check-response", "success": True, "health": result}
+            if pending:
+                answer["baseSkinPending"] = True
+            self._send_mod_store_response(payload, answer)
         except Exception as e:
             log.exception("mod-store-check failed")
             self._send_mod_store_response(payload, {"type": "mod-store-check-response", "success": False, "error": str(e)})
