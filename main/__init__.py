@@ -581,12 +581,19 @@ def _update_registry_version() -> None:
             pass
 
 
-def _schedule_restart() -> bool:
+def _schedule_restart(root: Optional[Path] = None) -> bool:
     """Spawn a detached helper that relaunches Rose after this process exits.
 
     The new instance cannot start while the current one is still alive because
     of the single-instance mutex, so a small batch file waits for this PID to
     exit and then starts Rose again.
+
+    A copy installed from GitHub (main/self_update.py) is started again through
+    Start Rose.bat, which runs the updater first: a version published or
+    downloaded meanwhile is installed by the restart. When that script started
+    this Rose and still waits for it, a note is all it needs (it starts Rose
+    again in its own window) and no helper is spawned. *root*: the copy's
+    folder, this one unless a test names another.
     """
     import os
     import subprocess
@@ -599,10 +606,20 @@ def _schedule_restart() -> bool:
             workdir = exe_path.parent
             launch_cmd = f'start "" /D "{workdir}" "{exe_path}"'
         else:
-            # Development mode: relaunch `python main.py` from the project root
             exe_path = Path(sys.executable).resolve()
-            workdir = Path(__file__).parent.parent
-            launch_cmd = f'start "" /D "{workdir}" "{exe_path}" "main.py"'
+            workdir = Path(root) if root is not None else Path(__file__).parent.parent
+            from main import self_update
+            if self_update.starts_through_script(workdir):
+                if self_update.start_script_waits():
+                    self_update.leave_restart_note(workdir, "tray")
+                    log.info(f"Restart left to {self_update.START_SCRIPT}: it updates Rose, then starts it again")
+                    return True
+                # cmd /c, named: `start` alone runs a .bat with cmd /k, whose window stays once Rose is closed
+                script = workdir / self_update.START_SCRIPT
+                launch_cmd = f'start "Rose" /D "{workdir}" cmd /c ""{script}""'
+            else:
+                # Development mode: relaunch `python main.py` from the project root
+                launch_cmd = f'start "" /D "{workdir}" "{exe_path}" "main.py"'
 
         batch_path = Path(tempfile.gettempdir()) / f"rose_restart_{pid}.bat"
 

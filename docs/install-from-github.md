@@ -70,6 +70,32 @@ Tests: `test/test_self_update.py` (the watcher; the updater, the question and Ro
 scratch folder (10.8 MB in 2.8 s), and the start script's own lines with stand-in programs (updater, Rose,
 note, updater, Rose). Not checked: the window and the restart on an installed copy.
 
+## Restart from the tray (Nov 23)
+
+Found on Nov 23: a fix was published, Rose was restarted from the tray, and the old code still ran. The tray's
+Restart started `python main.py` itself, so the updater never ran; the version was downloaded five minutes
+later and then waited for a start from the shortcut, whatever the number of tray restarts. That Rose was also
+no longer `Start Rose.bat`'s, so a Yes to "Restart Rose now to install it?" would have closed it for good.
+
+Now (`_schedule_restart` in `main/__init__.py`, for installed copies only: `self_update.starts_through_script`):
+
+- **`Start Rose.bat` started this Rose and waits for it** (`self_update.start_script_waits`: a `cmd.exe`
+  running that script is among the process's parents, the `.venv`'s `python.exe` in between): Rose leaves the
+  note `.rose-restart`, as a Yes to the update question does, and quits. The script runs the updater and
+  starts Rose again in the same window. No helper is started.
+- **No script waits** (a Rose an older restart started, or `python main.py` typed in): the helper that waits
+  for Rose to end starts `Start Rose.bat` in a window of its own (`cmd /c`, so the window closes with the
+  script), instead of `main.py`. From then on the first case holds.
+- A note the tray leaves while Rose is still starting is kept: the watcher's start removes only notes nobody
+  read (`_note_left`).
+
+A developer's copy and a built `Rose.exe` restart as before.
+
+Tests: `test/test_tray_restart.py` (the helper, Rose's parents and the temporary folder are stand-ins).
+Checked for real: the helper against a stand-in folder with a space in its name (it ran that folder's
+`Start Rose.bat`, and a Python started by it found the script among its parents). Not checked: the tray's
+Restart on an installed copy.
+
 ## Publishing, and what never leaves the developer's PC
 
 `python scripts/publish.py` is the only way this version is published.

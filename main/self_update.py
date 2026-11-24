@@ -28,6 +28,10 @@ log = get_logger()
 ROOT = Path(__file__).resolve().parent.parent
 UPDATER = Path("scripts") / "rose_update.py"
 RESTART_MARKER = ".rose-restart"  # Start Rose.bat: Rose asked to be started again
+START_SCRIPT = "Start Rose.bat"
+# The tray's Restart left the note in this run (leave_restart_note), maybe while Rose was still starting:
+# start() must not take it for one nobody read
+_note_left = False
 FIRST_CHECK_S = 5 * 60    # the start itself just updated
 CHECK_EVERY_S = 30 * 60
 LOOK_EVERY_S = 5.0        # how often a waiting update looks whether the user is free
@@ -43,6 +47,44 @@ def load_updater(root: Path = ROOT):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def starts_through_script(root: Path = ROOT) -> bool:
+    """Whether Start Rose.bat is what starts this copy (one installed from GitHub): not a developer's copy,
+    not a built Rose.exe, and its updater and start script are there. Only that script installs an update,
+    so such a copy is never started again as `python main.py` (the tray's Restart did, until Nov 23: a
+    published version then waited for a start from the shortcut)."""
+    root = Path(root)
+    return (not getattr(sys, "frozen", False) and not (root / ".git").exists()
+            and (root / UPDATER).is_file() and (root / START_SCRIPT).is_file())
+
+
+def start_script_waits(process=None) -> bool:
+    """Whether Start Rose.bat started this Rose and waits for it to end: it then reads the note
+    (RESTART_MARKER). Told by this process's parents: a cmd.exe running that script is one of them (the
+    .venv's python.exe stands in between). False when it cannot be told: a helper starts Rose instead."""
+    try:
+        import psutil
+
+        parents = (process or psutil.Process()).parents()
+    except Exception as e:  # noqa: BLE001 - psutil missing, or this process cannot be read
+        log.debug(f"[UPDATE] Could not look for {START_SCRIPT} among the parents: {type(e).__name__}: {e}")
+        return False
+    for parent in parents:
+        try:
+            if parent.name().lower() == "cmd.exe" and START_SCRIPT.lower() in " ".join(parent.cmdline()).lower():
+                return True
+        except Exception:  # noqa: BLE001 - a parent that ended or cannot be read is not the script
+            continue
+    return False
+
+
+def leave_restart_note(root: Path = ROOT, why: str = "restart") -> None:
+    """Leave the note Start Rose.bat reads when this Rose ends: it runs the updater and starts Rose again
+    in the same window. Only when the script waits (start_script_waits): nobody else reads the note."""
+    global _note_left
+    (Path(root) / RESTART_MARKER).write_text(why, encoding="utf-8")
+    _note_left = True
 
 
 def ask_restart(version: str) -> bool:
@@ -118,7 +160,8 @@ def start(state, quit_rose: Callable[[], None], root: Path = ROOT) -> Optional[U
     without its updater. Never raises: Rose starts either way."""
     try:
         root = Path(root)
-        (root / RESTART_MARKER).unlink(missing_ok=True)  # a note nobody read must not restart Rose at its next quit
+        if not _note_left:
+            (root / RESTART_MARKER).unlink(missing_ok=True)  # a note nobody read must not restart Rose at its next quit
         if getattr(sys, "frozen", False) or (root / ".git").exists() or not (root / UPDATER).is_file():
             return None
         watcher = UpdateWatcher(state, quit_rose, root=root)
