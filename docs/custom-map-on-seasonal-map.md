@@ -99,4 +99,28 @@ games". `.git/rose-map-port.txt` says `on` there. It is still off everywhere els
 A whole game with it has not been seen yet. If a game quits at its start, Rose's reconnect leaves the newest
 mod out and the game runs on the winter map; the file then goes back to `practice` or is deleted.
 
+### A switch for an installed copy (Nov 24)
+
+Reported on Nov 24 from the user's second PC, which runs an installed copy: "the spirit blossom map works
+great, but mystic rift doesnt, jg monsters are different, but map is still winter". The port was off there
+and could not be turned on: the switch was only `.git/rose-map-port.txt`, an installed copy has no `.git`,
+and one made for the switch would end its updates (the updater leaves a copy with `.git` as it is).
+
+What the two maps are, read from the files:
+
+- **Spirit Blossom** ships a `map11.bin` of its own: it says itself which map loads, so it shows without
+  the port (and gets none).
+- **Mystic Rift** is 239 files named by hash, 237 textures and 2 meshes. 64 are characters' (minions,
+  turrets, inhibitors, the nexus, Gromp, the blue buff), which every map loads: those showed. Of its 168 map
+  textures, the materials the standard geometry names link 161; the materials the winter geometry names link
+  2. It ships no `map11.bin`, no geometry and no materials: it is one the port is made for.
+
+Now `map_force.mode()` also reads `rose-map-port.txt` in Rose's data folder (`%LOCALAPPDATA%\Rose`,
+`pc_mode_file`), the same words `practice` and `on`. No update writes that folder and nothing is published
+from it. The developer's copy's file says it when both are there. Without a file it is off, as before: a PC
+that installed Rose gets the port only when its user makes that file.
+
+Checked offline on that PC's game files: with the word `practice` the port is made for Mystic Rift in a
+Practice Tool game only, with `on` in every game (2 files, 22.3 MB, 0.15 s). Not checked: a game.
+
 Tests: `injection/tests/test_map_force.py`, three cases in `injection/tests/test_staging.py`.

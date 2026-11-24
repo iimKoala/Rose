@@ -194,7 +194,7 @@ class LastMapSkinTests(GameTestCase):
 class ModeTests(ModTestCase):
     def test_this_pc_has_to_ask_for_it(self):
         word = self.root / "rose-map-port.txt"
-        with patch.object(map_force, "MODE_FILE", word):
+        with patch.object(map_force, "MODE_FILE", word), patch.object(map_force, "pc_mode_file", return_value=None):
             self.assertEqual(map_force.mode(), "off", "no file: off, as on a PC that installed Rose")
             for text, mode in (("practice", "practice"), ("ON\n", "on"), ("yes please", "off"), ("", "off")):
                 word.write_text(text, encoding="utf-8")
@@ -202,6 +202,35 @@ class ModeTests(ModTestCase):
 
     def test_the_word_is_kept_where_nothing_is_published_from(self):
         self.assertEqual(map_force.MODE_FILE.parent.name, ".git")
+
+    def test_an_installed_copy_asks_in_roses_data_folder(self):
+        """It has no .git, and one made for the switch would end its updates"""
+        data = self.root / "Rose data"
+        data.mkdir()
+        with patch.object(map_force, "MODE_FILE", self.root / "copy" / ".git" / "rose-map-port.txt"), \
+                patch("utils.core.paths.get_user_data_dir", return_value=data):
+            self.assertEqual(map_force.pc_mode_file(), data / "rose-map-port.txt")
+            self.assertEqual(map_force.mode(), "off", "no file there either")
+            for text, mode in (("on", "on"), ("Practice\r\n", "practice"), ("maybe", "off")):
+                (data / "rose-map-port.txt").write_text(text, encoding="utf-8")
+                self.assertEqual(map_force.mode(), mode)
+            (data / "rose-map-port.txt").write_text("on", encoding="utf-8-sig")
+            self.assertEqual(map_force.mode(), "on", "saved with a byte order mark, as some editors do")
+
+    def test_the_developers_copy_says_it_when_both_files_are_there(self):
+        developer, pc = self.root / "developer.txt", self.root / "pc.txt"
+        developer.write_text("practice", encoding="utf-8")
+        pc.write_text("on", encoding="utf-8")
+        with patch.object(map_force, "MODE_FILE", developer), patch.object(map_force, "pc_mode_file", return_value=pc):
+            self.assertEqual(map_force.mode(), "practice")
+            developer.write_text("no", encoding="utf-8")
+            self.assertEqual(map_force.mode(), "off", "a word it does not know is off, not the other file's turn")
+
+    def test_a_data_folder_that_cannot_be_told_is_off(self):
+        with patch.object(map_force, "MODE_FILE", self.root / "none.txt"), \
+                patch("utils.core.paths.get_user_data_dir", side_effect=OSError("no profile")):
+            self.assertIsNone(map_force.pc_mode_file())
+            self.assertEqual(map_force.mode(), "off")
 
 
 class PrepareTests(GameTestCase):

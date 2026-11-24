@@ -57,7 +57,9 @@ MAP_BIN = "data/maps/shipping/map11/map11.bin"
 SKIN_PREFIX = "Maps/Shipping/Map11/MapSkins/"
 DEFAULT = "Default"
 # This PC's switch: one word, "practice" (made for Practice Tool games only) or "on" (for every game).
-# The file is in .git, which is never published and which an installed copy does not have: off there.
+# A developer's copy keeps the file in .git, which is never published. An installed copy has no .git, and
+# must not get one (the updater leaves a copy with .git as it is): its file is in Rose's data folder
+# (pc_mode_file), which no update writes and nothing is published from. Without a file: off.
 MODE_FILE = Path(__file__).resolve().parents[2] / ".git" / "rose-map-port.txt"
 LOGS_LOOKED_AT = 10  # game logs read, newest first, for the last map skin of Summoner's Rift
 _CONTAINER = propbin.fnv1a_lower("mMapContainerLink")
@@ -203,13 +205,29 @@ def last_map_skin(game_dir: Path, known) -> Optional[str]:
     return None
 
 
-def mode() -> str:
-    """"off", "practice" or "on": this PC's word in MODE_FILE, "off" without one"""
+def pc_mode_file() -> Optional[Path]:
+    """The switch of a PC whose Rose is an installed copy: rose-map-port.txt in Rose's data folder
+    (%LOCALAPPDATA%\\Rose, with the accounts, mods and settings). None when that folder cannot be told."""
     try:
-        word = MODE_FILE.read_text(encoding="utf-8").strip().lower()
-    except OSError:
-        return "off"
-    return word if word in ("practice", "on") else "off"
+        from utils.core.paths import get_user_data_dir
+
+        return get_user_data_dir() / MODE_FILE.name
+    except Exception:  # noqa: BLE001 - no data folder, no switch: off
+        return None
+
+
+def mode() -> str:
+    """"off", "practice" or "on": this PC's word, "off" without one. The developer's copy's file (MODE_FILE)
+    says it when it is there, else the PC's (pc_mode_file). A file saved with a byte order mark reads too."""
+    for path in (MODE_FILE, pc_mode_file()):
+        if path is None:
+            continue
+        try:
+            word = path.read_text(encoding="utf-8-sig").strip().lower()
+        except (OSError, ValueError):
+            continue
+        return word if word in ("practice", "on") else "off"
+    return "off"
 
 
 _game_skins: Dict[tuple, List[MapSkin]] = {}  # (the game's map WAD, its date and size) -> its map skins
