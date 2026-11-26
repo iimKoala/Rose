@@ -76,12 +76,28 @@ def turn_on() -> bool:
 # Only a Rose that armed the switch at its own start obeys it. The tests and tools that build the injection
 # run on the developer's PC too, and that PC's file must never reach them.
 _armed = False
+_tell = None  # how that Rose shows its user a notification (the tray's), for a switch Rose turns by itself
 
 
-def arm() -> None:
-    """Rose's start: from now on the injection asks the switch."""
-    global _armed
-    _armed = True
+def arm(tell=None) -> None:
+    """Rose's start: from now on the injection asks the switch. *tell*: a function (message) that shows the
+    user a notification, used when Rose turns the switch off itself (injection/core/early_exits.py)."""
+    global _armed, _tell
+    _armed, _tell = True, tell
+
+
+def armed() -> bool:
+    """Whether this is a Rose that obeys the switch (see arm)."""
+    return _armed
+
+
+def tell(message: str) -> None:
+    """Show the user *message* if this Rose can; never raises."""
+    try:
+        if _tell is not None:
+            _tell(message)
+    except Exception:  # noqa: BLE001 - a notification must not break what called it
+        pass
 
 
 def off_now() -> bool:

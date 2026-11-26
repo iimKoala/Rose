@@ -245,6 +245,16 @@ class TrayManager:
         except Exception:  # noqa: BLE001 - the menu must draw either way
             return True
 
+    def notify(self, message: str, title: str = "Rose") -> None:
+        """A notification from the tray icon, and the menu drawn anew (its ticks may have changed): for the
+        mods switch Rose turns by itself (injection/core/early_exits.py). Never raises."""
+        try:
+            if self.icon and not self._stop_event.is_set():
+                self.icon.update_menu()
+                self.icon.notify(message, title)
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"Could not show a notification: {e}")
+
     def _on_toggle_mods(self, icon, item):
         """Mods in game, on or off. Off: Rose loads nothing into the game; its other features stay."""
         try:

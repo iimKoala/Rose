@@ -703,7 +703,7 @@ def run_league_unlock(args: Optional[argparse.Namespace] = None,
     # This fork: the tray's "Mods in game" switch counts from here on (injection/core/mods_switch.py). Only a
     # Rose that started this way obeys it: tests and tools never arm it.
     from injection.core import mods_switch
-    mods_switch.arm()
+    mods_switch.arm(tray_manager.notify if tray_manager else None)
     if mods_switch.is_off():
         log.warning(f"Mods in game are switched off ({mods_switch.reason() or 'no reason given'}): Rose puts "
                     "nothing in the game. Tray icon > Mods in game turns them on again.")

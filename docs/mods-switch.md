@@ -16,6 +16,20 @@ The patcher is LTK Manager's. Rose's source never names it and sets none of its 
 - It is kept as a file, `mods-off.txt` in Rose's data folder (`%LOCALAPPDATA%\Rose`): there while mods are off, with the reason and the time in it. No update writes that folder.
 - A switch turned off during champion select counts from that game on: a patcher the countdown had already started is dropped when the injection would begin. Turned off during a game, it counts from the next one.
 
+## Rose turns it off by itself (Nov 25, later)
+
+Asked for the same evening: "Should Rose turn mods off by itself after two games in a row close at their start?" "Yes, build it."
+
+- **What counts.** A game that leaves play less than 10 seconds after its loading screen, with Rose's mods in it. The five games Riot's anti-cheat closed that evening left play after 1.5 to 5 seconds; a player who quits by hand needs longer. The time is read from the game's own log (`Logs\GameLogs\<game>\..._r3dlog.txt`): the line where the game enters `GAMESTATE_GAMELOOP` and the first line where it leaves it.
+- **Two in a row.** The first such game only counts. After the second, Rose turns **Mods in game** off (the reason is kept in the file), stops LTK Manager's patcher so that a reconnect runs without it, shows a tray notification and writes a warning in its log. A game that ran in between starts the count anew.
+- **What does not count.** A game without Rose's mods in it. A game Rose closed itself to restart it under the patcher (it was killed, so its log has no leaving line). A game whose log cannot be read. A game that crashed.
+- **Turning mods on again** is the player's: tray icon > Mods in game. Rose never turns them on by itself.
+- The game's log is looked at two seconds after the client reports that the game left play, so the game has finished writing it.
+
+`injection/core/early_exits.py` (reading the log and counting; written by the local Continue model from a brief) and `OverlayManager._watch_for_early_exit` / `_judge_early_exit` (when to look, and what to do). Tests: `injection/tests/test_early_exits.py`, with real lines of that evening's logs.
+
+Not checked: a real game closing twice. What is known of the pattern comes from Practice Tool games on one PC; a game with other players may be closed at another moment, for example during its loading screen, and would then not be counted.
+
 ## How
 
 - `injection/core/mods_switch.py`: the file (`is_off`, `reason`, `turn_off`, `turn_on`), written by the local Continue model from a brief; and `arm` / `off_now`, added in review: only a Rose that armed the switch at its own start obeys it, so the tests and tools that build the injection on the developer's PC are never reached by that PC's file.
@@ -27,4 +41,4 @@ The patcher is LTK Manager's. Rose's source never names it and sets none of its 
 
 - `injection/tests/test_mods_switch.py`: the file's behaviour; armed and not armed; off, none of the four methods asks LTK Manager for anything, and on they do; the trigger leaves the pick alone and drops an early patcher; the tray item's tick, press and notification. The gate test was also run with the gates taken out: it fails there.
 - **Not checked: a game.** Rose with the switch off has not been run through a champion select and a game yet.
-- Not built: turning the switch off by itself after games that close at their start. Until then the player has to do it.
+- Built the same evening: the switch turning off by itself (above).

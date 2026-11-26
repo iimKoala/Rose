@@ -71,6 +71,11 @@ def _mods_off() -> bool:
     return mods_switch.off_now()
 
 
+# The fork's guard looks at the game's own log this long after the game left play: the game then has
+# finished writing it (_watch_for_early_exit)
+EARLY_EXIT_LOG_WAIT_S = 2.0
+
+
 # The patcher status is polled while the game runs (one tick per sleep)
 PATCHER_STATUS_POLL_TICKS = 4
 # After start_patcher, how long the injection waits for the patcher to build
@@ -245,6 +250,61 @@ class OverlayManager(ReconnectChoiceMixin):
             self._match_in_progress.set()
         else:
             self._match_in_progress.clear()
+        self._watch_for_early_exit(phase)
+
+    # -- the fork's guard: games that close at their start ---------------------
+    _phase_before: Optional[str] = None
+    _early_exits = None  # injection.core.early_exits.EarlyExits, made when first needed
+
+    def _watch_for_early_exit(self, phase: Optional[str]) -> None:
+        """When the game leaves play (the phase after InProgress), have its own log looked at
+        (_judge_early_exit), a moment later so the game has finished writing it. Only in a Rose that armed
+        the mods switch, so nothing here runs in tests or tools. Never raises: the phases must go on."""
+        try:
+            before, self._phase_before = self._phase_before, phase
+            if before != "InProgress" or phase == "InProgress":
+                return
+            from injection.core import mods_switch
+            if not mods_switch.armed() or mods_switch.is_off():
+                return
+            with_mods = self._running_session is not None  # the patcher was started for this game
+            timer = threading.Timer(EARLY_EXIT_LOG_WAIT_S, self._judge_early_exit, args=(with_mods,))
+            timer.daemon = True
+            timer.start()
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"[INJECT] Could not watch for a game closed at its start: {e}")
+
+    def _judge_early_exit(self, with_mods: bool) -> bool:
+        """The game that just ended, from its own log (injection/core/early_exits.py): after the second in a
+        row that left play within seconds of its loading screen with Rose's mods in it, Rose turns its mods
+        off (mods_switch), ends the patcher so a reconnect runs without it, and tells the user. That is the
+        pattern of Riot's anti-cheat closing a game with mods in it (docs/mods-switch.md); a player's own
+        quit takes longer. Returns whether the mods were turned off."""
+        try:
+            from injection.core import early_exits, mods_switch
+            if self._early_exits is None:
+                self._early_exits = early_exits.EarlyExits()
+            played = early_exits.read_played(self.game_dir)
+            if not self._early_exits.game_over(played, with_mods):
+                return False
+            if not mods_switch.turn_off("two games in a row closed within seconds of starting with mods in them"):
+                return False
+            log.warning("[INJECT] Two games in a row closed within seconds of starting with mods in them: "
+                        "Rose turned its mods off. Tray icon > Mods in game turns them on again.")
+            report_issue(
+                "MODS_SWITCHED_OFF",
+                "warning",
+                "Rose turned its mods off: two games in a row closed within seconds of starting with mods in them.",
+                hint="Play without mods for now. Tray icon > Mods in game turns them on again.",
+            )
+            if self.process_manager:
+                self.process_manager.stop_overlay_process()  # a reconnect must not meet the patcher again
+            mods_switch.tell("Rose turned its mods off: two games in a row closed within seconds of starting. "
+                             "Reconnect and play without mods. The tray's Mods in game turns them on again.")
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"[INJECT] Could not judge whether the game closed at its start: {e}")
+            return False
 
     def _await_match_in_progress(self, session: dict) -> bool:
         """Whether the client reports the match running (phase InProgress),
