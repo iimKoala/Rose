@@ -643,7 +643,18 @@ class InjectionTrigger:
             log.error(f"   Loadout Timer: #{ticker_id}")
             log.error("=" * LOG_SEPARATOR_WIDTH)
             return
-        
+
+        # The fork's switch (tray: Mods in game). Off: Rose puts nothing in the game and leaves the player's
+        # own pick alone (no base skin is forced for a skin that will not be injected)
+        from injection.core import mods_switch
+        if mods_switch.off_now():
+            log.info(f"[INJECT] Mods are switched off (tray: Mods in game) - nothing is injected "
+                     f"({mods_switch.reason() or 'no reason given'})")
+            if self.injection_manager:
+                # A patcher the countdown started before the switch was turned must not meet the game
+                self.injection_manager.discard_early_patcher()
+            return
+
         # Check if custom mod is selected for this skin (before logging)
         locked_champ_id = self.state.locked_champ_id or self.state.hovered_champ_id
         selected_chroma_id = getattr(self.state, 'selected_chroma_id', None)

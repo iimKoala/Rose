@@ -17,6 +17,9 @@ tokens. One hit and nothing is published. A hit is told by its kind and its plac
     python scripts/publish.py --message "..."      with this text as the public commit's message
 
 More values never to publish, one a line: .git/rose-private.txt (that file never leaves the PC either).
+Everyday words that are not private on this PC, one a line: .git/rose-ordinary.txt (never published either).
+An account named with an everyday word would otherwise stop every publish: the word stands in files that
+were public long before. The account's whole name with its tag is still searched for.
 Design: docs/install-from-github.md.
 """
 
@@ -56,14 +59,25 @@ def git(*args, data=None, cwd=ROOT) -> bytes:
     return subprocess.run(["git", *args], input=data, capture_output=True, check=True, cwd=cwd).stdout
 
 
+def ordinary_here(root: Path = ROOT) -> set:
+    """The everyday words of .git/rose-ordinary.txt, in lower case: what this PC's owner said is no more
+    private than the ORDINARY ones. The file is never published, so the words are not told by this script."""
+    try:
+        text = (root / ".git" / "rose-ordinary.txt").read_text(encoding="utf-8-sig")
+    except (OSError, ValueError):
+        return set()
+    return {line.strip().lower() for line in text.splitlines() if line.strip()}
+
+
 def private_values(owner: str = REPO.split("/")[0]) -> dict:
     """{value in lower case: its kind} of what must never be published. Values that are part of the
     repository owner's GitHub name are left out: that name is public by publishing at all."""
     found = {}
+    ordinary = ORDINARY | ordinary_here(ROOT)
 
     def add(kind: str, value) -> None:
         value = str(value or "").strip().lower()
-        if len(value) >= 3 and value not in ORDINARY and value not in owner.lower():
+        if len(value) >= 3 and value not in ordinary and value not in owner.lower():
             found.setdefault(value, kind)
 
     add("the Windows user name", os.environ.get("USERNAME"))

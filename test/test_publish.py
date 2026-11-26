@@ -5,10 +5,14 @@ keys and tokens are put together from pieces, so this file itself holds nothing 
 """
 
 import importlib.util
+import json
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "publish.py"
 spec = importlib.util.spec_from_file_location("publish", SCRIPT)
@@ -64,6 +68,38 @@ class AuditTests(unittest.TestCase):
 
         self.assertEqual(search(b"github.com/StarfallGames/Rose"), set())
         self.assertEqual(search(b"C:\\Users\\jdoe42"), {"the Windows user name"})
+
+
+class OrdinaryHereTests(unittest.TestCase):
+    """.git/rose-ordinary.txt: everyday words this PC's owner said are not private. Made-up account here."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="rose_publish_"))
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        (self.root / ".git").mkdir()
+        accounts = self.root / "appdata" / "Rose" / "accounts"
+        accounts.mkdir(parents=True)
+        (accounts / "accounts.json").write_text(json.dumps({"accounts": [{"riot_id": "Starfall Bob#EUW9", "login": "starfall"}]}),
+                                                encoding="utf-8")
+        for started in (patch.object(publish, "ROOT", self.root), patch.object(publish, "git", return_value=b""),
+                        patch.dict(os.environ, {"LOCALAPPDATA": str(self.root / "appdata"), "USERNAME": "jdoe42", "COMPUTERNAME": "PC-TEST"})):
+            started.start()
+            self.addCleanup(started.stop)
+
+    def test_without_the_file_every_word_of_an_account_is_private(self):
+        self.assertEqual(publish.ordinary_here(self.root), set())
+        values = publish.private_values("someowner")
+        self.assertLessEqual({"starfall", "bob", "euw9", "starfall bob#euw9"}, set(values))
+
+    def test_a_word_on_the_list_is_no_longer_searched_for_and_the_whole_name_still_is(self):
+        (self.root / ".git" / "rose-ordinary.txt").write_text("Starfall\r\n\r\n", encoding="utf-8-sig")  # as an editor saves it
+
+        self.assertEqual(publish.ordinary_here(self.root), {"starfall"})
+        values = publish.private_values("someowner")
+        self.assertNotIn("starfall", values, "also where it is a whole value: the login is that word")
+        self.assertLessEqual({"bob", "euw9", "starfall bob#euw9", "jdoe42"}, set(values), "nothing else is let go")
+        hits = publish.audit({"old/public.md": b"a starfall of sparks", "new/leak.md": b"signed in as Starfall Bob#EUW9"}, "Update", values)
+        self.assertEqual({place for _kind, place in hits}, {"new/leak.md"}, "the old file with the everyday word passes")
 
 
 class PublicParentsTests(unittest.TestCase):

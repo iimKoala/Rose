@@ -236,6 +236,35 @@ class TrayManager:
         except Exception as e:
             log.error(f"Failed to open mod store: {e}")
 
+    def _mods_in_game(self, item=None) -> bool:
+        """The tick of "Mods in game": whether Rose puts mods in the game (injection/core/mods_switch.py)"""
+        try:
+            from injection.core import mods_switch
+
+            return not mods_switch.is_off()
+        except Exception:  # noqa: BLE001 - the menu must draw either way
+            return True
+
+    def _on_toggle_mods(self, icon, item):
+        """Mods in game, on or off. Off: Rose loads nothing into the game; its other features stay."""
+        try:
+            from injection.core import mods_switch
+
+            if mods_switch.is_off():
+                changed = mods_switch.turn_on()
+                message = "Mods are on: skins, maps and other mods go into your next game."
+            else:
+                changed = mods_switch.turn_off("switched off from the tray")
+                message = "Mods are off: Rose puts nothing in the game from the next champion select on."
+            if not changed:
+                message = "The switch could not be saved. See Rose's log."
+            log.info(f"Mods in game switched from the tray: now {'off' if mods_switch.is_off() else 'on'}")
+            if self.icon and not self._stop_event.is_set():
+                self.icon.update_menu()
+                self.icon.notify(message, "Rose")
+        except Exception as e:
+            log.error(f"Failed to switch mods in game: {e}")
+
     def _on_restart(self, icon, item):
         """Handle restart menu item click"""
         log.info("Restart requested from system tray")
@@ -352,6 +381,7 @@ class TrayManager:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Account Switcher", self._on_account_switcher),
             pystray.MenuItem("Mod store", self._on_mod_store),
+            pystray.MenuItem("Mods in game", self._on_toggle_mods, checked=self._mods_in_game),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Mods Folder", self._on_open_mods),
             pystray.MenuItem(

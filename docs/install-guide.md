@@ -95,6 +95,7 @@ To paste one of those paths: press **Win+R**, paste it, press Enter.
 | `Rose could not be updated: ...` at a start | Rose starts anyway, as it is, and tries again next time. GitHub answers this question 60 times an hour for one internet address. |
 | No Rose buttons in the client | Is Rose's icon in the tray? Close the League client and open it again while Rose runs. Still nothing: right-click the tray icon, **Diagnose Rose startup**. |
 | Skins do not show in the game | LTK Manager must be installed and closed. If Rose cannot find it, press **Set up path** at Rose's start and pick `ltk-manager.exe`. |
+| The game closes a few seconds after it starts, or Riot Vanguard names `ltk_patcher_dll.dll` | Riot's anti-cheat is acting on LTK Manager's patcher, the part that puts mods in the game (seen since Nov 25, 2026). Right-click Rose's tray icon and untick **Mods in game**: Rose then loads nothing into the game and its other features keep working. Skins come back only when that is resolved between LTK Manager and Riot. |
 | Rose says LTK Manager's patcher is missing | An antivirus removed it. Reinstall LTK Manager and add its folder (`C:\Program Files\LTK Manager`) to your antivirus exclusions. |
 | The window closes at once | Start the shortcut again and read the last lines. They are also in the newest file of the logs folder. |
 | Something from the original stopped working | The original's own guide: [docs/troubleshooting.md](https://github.com/iimKoala/Rose/blob/release/docs/troubleshooting.md). |

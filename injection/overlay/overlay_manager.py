@@ -62,6 +62,15 @@ from config import (
 
 log = get_logger()
 
+
+def _mods_off() -> bool:
+    """The fork's switch (tray: Mods in game, injection/core/mods_switch.py). Off: no patcher is started, no
+    mod is installed and no game is held, so nothing of Rose's or LTK Manager's is loaded into the game.
+    Imported here, not at the top: injection.core imports this module."""
+    from injection.core import mods_switch
+    return mods_switch.off_now()
+
+
 # The patcher status is polled while the game runs (one tick per sleep)
 PATCHER_STATUS_POLL_TICKS = 4
 # After start_patcher, how long the injection waits for the patcher to build
@@ -411,6 +420,8 @@ class OverlayManager(ReconnectChoiceMixin):
         takes this session over; it reports missing components itself.
         """
         if self.game_dir is None:
+            return
+        if _mods_off():
             return
         with self._early_session_lock:
             self._early_session_unwanted = False
@@ -802,6 +813,8 @@ class OverlayManager(ReconnectChoiceMixin):
         patcher's game hold quit at once, and its restart for another pick
         gave up instead of waiting for the last build, so the client's game
         ran before the overlay was ready. A stop from here on counts."""
+        if _mods_off():
+            return
         if self.process_manager:
             self.process_manager.stopped_by_user = False
             self.process_manager.stopped_by_rose = False
@@ -871,6 +884,9 @@ class OverlayManager(ReconnectChoiceMixin):
         *selected_at* (time.monotonic()) is when the player picked them.
         Returns whether the mods are staged.
         """
+        if _mods_off():
+            return False
+
         def stopped() -> bool:
             return not still_wanted()
 
@@ -990,6 +1006,9 @@ class OverlayManager(ReconnectChoiceMixin):
             log.error("[INJECTOR] Cannot create overlay - League game directory not found")
             log.error("[INJECTOR] Please ensure League Client is running or manually set the path in config.ini")
             return 127
+        if _mods_off():
+            log.info("[INJECT] Mods are switched off (tray: Mods in game) - nothing is put in the game")
+            return 0  # as a session Rose stopped itself: no error, nothing ran
 
         if self.process_manager:
             # A stop from the previous session must not count against this

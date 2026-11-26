@@ -17,6 +17,12 @@
 > [Alban1911/Rose](https://github.com/Alban1911/Rose). This fork keeps all of it and adds the features on this
 > page. The original's own README is kept unchanged: [read it here](../README.md).
 
+> [!WARNING]
+> **Nov 25, 2026: skins and mods may not work.** On the developer's PC, Riot Vanguard now names LTK Manager's
+> patcher and every game with mods in it closes a few seconds after it starts. Nothing here hides anything from
+> Vanguard. To keep playing with Rose's other features, right-click Rose's tray icon and untick **Mods in game**
+> ([what that does](../docs/mods-switch.md)).
+
 ## What is whose
 
 <table>
@@ -91,6 +97,8 @@ client offer. Nothing reads or writes the game's memory.
   own ([its license](../native/rose-mod-check/LICENSE)).
 - **Install and update from GitHub.** One file to run, then Rose updates itself each time it starts. While it runs it downloads new versions too, and asks to restart when you are not in a game, a queue or champion select
   ([how](../docs/install-from-github.md)).
+- **A switch for mods.** Tray icon, **Mods in game**: off, Rose loads nothing into the game and the account
+  switcher, builds, panels and auto accept keep working ([why and how](../docs/mods-switch.md)).
 - **A check before every publish.** Everything sent to this repository is first searched for the developer's
   private values: names, accounts, keys. One hit and nothing is published.
 
